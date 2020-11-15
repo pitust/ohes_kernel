@@ -1,0 +1,10 @@
+[package]
+name = "faster_rlibc"
+version = "0.1.0"
+authors = ["pitust <stelmaszek.piotrpilot@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+cc = "1.0.59"

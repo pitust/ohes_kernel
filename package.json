@@ -1,0 +1,23 @@
+{
+  "name": "an_os",
+  "version": "1.0.0",
+  "description": "i decided i need no fast drive # Sun Sep 20 09:24:24 AM IST 2020 Working on the exec loader since i got the toolchain working. # Sun Sep 20 09:38:28 AM IST 2020 Exec loader now works # Sun Sep 20 01:19:13 PM IST 2020 Got /init running # Mon Sep 21 07:30:43 PM IST 2020 so i decided that a VM is so slow and i decided to preempt and load ELFs. It was really slow, that's why. In retrospect, it was stupid to make a Vm, that was sooooo slow. # Mon Sep 21 10:30:46 PM IST 2020 oh god preemptive multitasking is so confusing. Like this:",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/pitust/an_os.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pitust/an_os/issues"
+  },
+  "homepage": "https://github.com/pitust/an_os#readme",
+  "dependencies": {
+    "@types/node": "^14.14.6"
+  }
+}

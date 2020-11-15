@@ -1,0 +1,49 @@
+[package]
+authors = ["pitust <stelmaszek.piotrpilot@gmail.com>"]
+edition = "2018"
+name = "an_os"
+version = "0.1.0"
+autobins = false
+
+[features]
+conio = []
+default = []
+displayio = []
+fini_exit = []
+fini_wait = []
+debug_logs = []
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+safety-here = {path = "safety-here"}
+conquer-once = {version = "0.2.0", default-features = false}
+crossbeam-queue = {version = "0.2.1", features = ["alloc"], default-features = false}
+faster_rlibc = {path = "faster_rlibc"}
+font8x8 = {version = "0.2", default-features = false, features = ["unicode"]}
+kmacros = {path = "kmacros"}
+lazy_static = {version = "1.0", features = ["spin_no_std"]}
+linked_list_allocator = "0.8.0"
+pc-keyboard = "0.5.0"
+pic8259_simple = "0.2.0"
+x86_64 = "0.12.0"
+xmas-elf = "0.7.0"
+gimli = { version = "0.23.0", default-features = false, features = ["read"] }
+fallible-iterator = { version = "0.2.0", default-features = false, features = ["alloc"] }
+libc = { version = "0.2.45", default-features = false }
+cpp_demangle = { version = "0.3.1", default-features = false, features = ["alloc"] }
+serde = { version = "1.0.117", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0.59", default-features = false, features = ["alloc"] }
+serde_derive = "1.0.117"
+postcard = "0.5.1"
+multiboot2 = "0.9.0"
+fontdue = "0.4.0"
+x86 = "0.34.0"
+
+
+
+# [package.metadata.bootimage]
+# run-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-s", "-hdb", "initrd.cpio", "-enable-kvm", "-m", "1G", "-debugcon", "file:logz.txt", "-global", "isa-debugcon.iobase=0x402"]
+# test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-s", "-nographic", "-monitor", "none", "-enable-kvm", "-m", "1G", "-debugcon", "file:logz.txt", "-global", "isa-debugcon.iobase=0x402"]
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"

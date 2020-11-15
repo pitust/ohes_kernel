@@ -1,0 +1,9 @@
+
+[unstable]
+build-std = ["core", "alloc"]
+
+[build]
+target = "x86_64-unknown-none.json"
+# todo: make my own runner
+# [target.'cfg(target_os = "none")']
+# runner = "bootimage runner"

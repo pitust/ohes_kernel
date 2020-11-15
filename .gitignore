@@ -1,0 +1,13 @@
+/target
+initrd.cpio
+logz.txt
+/initrd
+/.gdb_history
+ksymmap.json
+ksymmap.pcrd
+ksymmap.epcrd
+node_modules/
+iso/
+build/
+cfg/
+fonts/
