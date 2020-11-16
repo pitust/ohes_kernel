@@ -9,6 +9,7 @@ use alloc::{
 use lazy_static::lazy_static;
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 pub mod cpio;
+pub mod gpt;
 #[derive(Debug)]
 pub struct Offreader {
     drive: Drive,

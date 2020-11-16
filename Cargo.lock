@@ -18,6 +18,7 @@ dependencies = [
  "font8x8",
  "fontdue",
  "gimli",
+ "hex",
  "kmacros",
  "lazy_static",
  "libc",
@@ -162,9 +163,9 @@ dependencies = [
 
 [[package]]
 name = "font8x8"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44226c40489fb1d602344a1d8f1b544570c3435e396dda1eda7b5ef010d8f1be"
+checksum = "1af980b6214598a826a6c0865385910e36b4c2ab64358306a8342db2eff3e17e"
 
 [[package]]
 name = "fontdue"
@@ -247,6 +248,12 @@ dependencies = [
  "serde",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "itoa"
@@ -480,9 +487,9 @@ dependencies = [
 
 [[package]]
 name = "ttf-parser"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d973cfa0e6124166b50a1105a67c85de40bbc625082f35c0f56f84cb1fb0a827"
+checksum = "7622061403fd00f0820df288e5a580e87d3ce15a1c4313c59fd1ffb77129903f"
 
 [[package]]
 name = "typenum"
@@ -515,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "x86_64"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5b4b42dbabe13b69023e1a1407d395f1a1a33df76e9a9efdbe303acc907e292"
+checksum = "79872a41412b9f91e72b24ab7f057ba500b5776349c5106d0b2e064e97ff1252"
 dependencies = [
  "bit_field 0.9.0",
  "bitflags",

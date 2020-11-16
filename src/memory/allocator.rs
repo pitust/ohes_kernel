@@ -1,6 +1,9 @@
 use crate::{print, println};
-use core::{ptr::NonNull, alloc::{GlobalAlloc, AllocRef, Layout}};
 use core::ptr::null_mut;
+use core::{
+    alloc::{AllocRef, GlobalAlloc, Layout},
+    ptr::NonNull,
+};
 use linked_list_allocator::{Heap, LockedHeap};
 use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
@@ -19,7 +22,9 @@ impl WrapperAlloc {
         return d.unwrap().as_ptr();
     }
     pub unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ALLOCATOR.get().deallocate(NonNull::new(ptr).unwrap(), layout);
+        ALLOCATOR
+            .get()
+            .deallocate(NonNull::new(ptr).unwrap(), layout);
     }
 }
 unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
@@ -27,10 +32,13 @@ unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
         return self.do_alloc(layout);
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ALLOCATOR.get().deallocate(NonNull::new(ptr).unwrap(), layout);
+        ALLOCATOR
+            .get()
+            .deallocate(NonNull::new(ptr).unwrap(), layout);
     }
 }
-pub static ALLOCATOR: crate::shittymutex::Mutex<Heap> = crate::shittymutex::Mutex::new(Heap::empty());
+pub static ALLOCATOR: crate::shittymutex::Mutex<Heap> =
+    crate::shittymutex::Mutex::new(Heap::empty());
 pub const HEAP_START: usize = 0x100000000;
 pub const HEAP_SIZE: usize = 4 * 1024;
 pub const COW_PAGE: PageTableFlags = PageTableFlags::BIT_10;

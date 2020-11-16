@@ -45,13 +45,17 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 Some(s) => {
                     // free it
                     preempt::CURRENT_TASK.get().box1 = None;
-                    unsafe { Box::from_raw(s as *const [u8] as *mut [u8]); }
+                    unsafe {
+                        Box::from_raw(s as *const [u8] as *mut [u8]);
+                    }
                 }
-                None => {},
+                None => {}
             };
             let mut p = vec![];
             p.reserve_exact(arg2 as usize);
-            unsafe { accelmemcpy(p.as_mut_ptr(), arg1 as *const u8, arg2 as usize); }
+            unsafe {
+                accelmemcpy(p.as_mut_ptr(), arg1 as *const u8, arg2 as usize);
+            }
             preempt::CURRENT_TASK.get().box1 = Some(Box::leak(p.into_boxed_slice()));
             0
         }
@@ -66,7 +70,9 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             /* sys_readbuffer */
             match preempt::CURRENT_TASK.box1 {
                 Some(s) => {
-                    unsafe { accelmemcpy(arg1 as *mut u8, s.as_ptr(), s.len()); };
+                    unsafe {
+                        accelmemcpy(arg1 as *mut u8, s.as_ptr(), s.len());
+                    };
                     s.len() as u64
                 }
                 None => 0,
@@ -135,14 +141,16 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
 unsafe extern "C" fn syscall_trampoline_rust(sysno: u64, arg1: u64, arg2: u64) -> u64 {
     syscall_handler(sysno, arg1, arg2)
 }
-extern {
+extern "C" {
     static mut RSP_PTR: u64;
 }
 pub fn get_rsp_ptr() -> VirtAddr {
     unsafe { VirtAddr::new(RSP_PTR) }
 }
 pub fn set_rsp_ptr(va: VirtAddr) {
-    unsafe { RSP_PTR = va.as_u64(); }
+    unsafe {
+        RSP_PTR = va.as_u64();
+    }
 }
 pub fn alloc_rsp_ptr() -> VirtAddr {
     const STACK_SIZE: usize = 4096 * 5;
