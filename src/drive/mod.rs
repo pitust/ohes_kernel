@@ -10,11 +10,17 @@ use lazy_static::lazy_static;
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 pub mod cpio;
 pub mod gpt;
+pub mod ext2;
+pub mod fat;
 #[derive(Debug)]
 pub struct Offreader {
     drive: Drive,
     offlba: u32,
     queue: ArrayQueue<u8>,
+}
+
+trait RODev {
+    fn read_from(&mut self, lba: u32) -> Result<Vec<u8>, String>;
 }
 
 #[derive(Debug, Clone)]
