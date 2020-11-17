@@ -19,7 +19,7 @@ pub struct Offreader {
     queue: ArrayQueue<u8>,
 }
 
-trait RODev {
+pub trait RODev {
     fn read_from(&mut self, lba: u32) -> Result<Vec<u8>, String>;
 }
 
@@ -54,7 +54,16 @@ impl Drive {
             is_slave,
         }
     }
-    pub fn read_from(&mut self, lba: u32) -> Result<Vec<u8>, String> {
+    pub fn get_offreader(&self) -> Offreader {
+        Offreader {
+            drive: self.clone(),
+            offlba: 0,
+            queue: ArrayQueue::new(1024),
+        }
+    }
+}
+impl RODev for Drive {
+    fn read_from(&mut self, lba: u32) -> Result<Vec<u8>, String> {
         let mut vec = Vec::new();
         vec.reserve_exact(512);
         unsafe { vec.set_len(512) };
@@ -96,15 +105,7 @@ impl Drive {
         }
         Ok(vec)
     }
-    pub fn get_offreader(&self) -> Offreader {
-        Offreader {
-            drive: self.clone(),
-            offlba: 0,
-            queue: ArrayQueue::new(1024),
-        }
-    }
 }
-
 impl Offreader {
     pub fn offset(&self, off: u32) -> Result<Offreader, String> {
         let mut nor = Offreader {
