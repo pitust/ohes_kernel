@@ -13,6 +13,7 @@
 #![allow(unused_imports)]
 #![feature(naked_functions)]
 #![feature(const_ptr_offset)]
+#![feature(iter_advance_by)]
 #![feature(const_raw_ptr_to_usize_cast)]
 
 extern crate alloc;
@@ -28,6 +29,7 @@ pub mod exiting;
 pub mod init;
 pub mod interrupts;
 pub mod io;
+pub mod ksvc;
 pub mod ksymmap;
 pub mod main;
 pub mod memory;

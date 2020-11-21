@@ -1,5 +1,3 @@
 use crate::prelude::*;
 
-pub fn try_fat() {
-    
-}
+pub fn try_fat() {}

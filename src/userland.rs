@@ -31,13 +31,40 @@ fn user_gets(mut ptr: *mut u8) -> String {
     s
 }
 
+ezy_static! { SVC_MAP, BTreeMap<String, u64>, BTreeMap::new() }
+fn freebox1() {
+    match preempt::CURRENT_TASK.box1 {
+        Some(s) => {
+            // free it
+            preempt::CURRENT_TASK.get().box1 = None;
+            unsafe {
+                Box::from_raw(s as *const [u8] as *mut [u8]);
+            }
+        }
+        None => {}
+    };
+}
+fn freebox2() {
+    match preempt::CURRENT_TASK.box2 {
+        Some(s) => {
+            // free it
+            preempt::CURRENT_TASK.get().box2 = None;
+            unsafe {
+                Box::from_raw(s as *const [u8] as *mut [u8]);
+            }
+        }
+        None => {}
+    };
+}
 pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
     println!("syscall {:x} {} {}", sysno, arg1, arg2);
     X.store(1, Ordering::Relaxed);
     match sysno {
         0 => {
             /* sys_exit */
-            0
+            loop {
+                preempt::yield_task();
+            }
         }
         1 => {
             /* sys_bindbuffer */
@@ -88,22 +115,76 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         5 => {
             /* sys_send */
+            let target = user_gets(arg1 as *mut u8);
+            x86_64::instructions::interrupts::without_interrupts(|| {
+                // if ksvc::KSVC_TABLE {
+
+                // }
+                let p = *SVC_MAP.get().get(&target).unwrap();
+                for r in preempt::TASK_QUEUE.get().iter_mut() {
+                    if p == r.pid {
+                        while !r.is_listening {
+                            preempt::yield_task();
+                        }
+                        r.is_listening = false;
+                        r.box1 = preempt::CURRENT_TASK.box1;
+                        r.box2 = preempt::CURRENT_TASK.box2;
+                        while !r.is_done {
+                            preempt::yield_task();
+                        }
+                        freebox1();
+                        freebox2();
+                        preempt::CURRENT_TASK.get().box1 = r.box1;
+                        preempt::CURRENT_TASK.get().box1 = r.box2;
+                        r.box1 = None;
+                        r.box2 = None;
+                    }
+                }
+            });
             0
         }
         6 => {
             /* sys_listen */
+            let name = user_gets(arg1 as *mut u8);
+            preempt::CURRENT_TASK.get().is_listening = false;
+            SVC_MAP.get().insert(name, preempt::CURRENT_TASK.pid);
             0
         }
         7 => {
             /* sys_accept */
+            assert_eq!(
+                *SVC_MAP.get().get(&user_gets(arg1 as *mut u8)).unwrap(),
+                preempt::CURRENT_TASK.pid
+            );
+            preempt::CURRENT_TASK.get().is_done = false;
+            preempt::CURRENT_TASK.get().is_listening = true;
+            x86_64::instructions::interrupts::without_interrupts(|| {
+                while preempt::CURRENT_TASK.get().is_listening {
+                    preempt::yield_task()
+                }
+            });
+
             0
         }
         8 => {
             /* sys_exec */
+            x86_64::instructions::interrupts::without_interrupts(|| {
+                let l = preempt::CURRENT_TASK.box1;
+                let r = preempt::CURRENT_TASK.box1;
+                do_exec(l.unwrap(), r.unwrap());
+                freebox1();
+                freebox2();
+                return;
+            });
             0
         }
         9 => {
             /* sys_respond */
+            x86_64::instructions::interrupts::without_interrupts(|| {
+                preempt::CURRENT_TASK.get().is_done = true;
+                preempt::yield_task();
+                preempt::CURRENT_TASK.get().is_done = true;
+            });
             0
         }
         10 => {
@@ -291,6 +372,63 @@ pub fn loaduser() {
     unsafe {
         jump_user(exe.header.pt2.entry_point());
     }
+}
+
+pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
+    // let's test multitasking
+    let slice = kernel;
+    let mut pages: Vec<*mut u8> = vec![];
+    let exe = xmas_elf::ElfFile::new(slice).unwrap();
+    let mut program_break: u64 = 0xFFFF800000000000;
+    for ph in exe.program_iter() {
+        let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
+        if ph.flags().is_read() {
+            flags |= PageTableFlags::USER_ACCESSIBLE;
+        }
+        if ph.flags().is_execute() {
+            flags ^= PageTableFlags::NO_EXECUTE;
+        }
+        if ph.flags().is_write() {
+            flags |= PageTableFlags::WRITABLE;
+        }
+        println!("Flags: {:?}", flags);
+        let page_count = (ph.file_size() + 4095) / 4096;
+        for i in 0..page_count {
+            let data = crate::memory::mpage();
+            pages.push(data);
+            if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
+                panic!("Invalid target for ELF loader!");
+            }
+            map_to(
+                VirtAddr::from_ptr(data),
+                VirtAddr::new(ph.virtual_addr() + (i * 4096)),
+                flags,
+            );
+        }
+        let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
+        program_break = if maybe_new_program_break < program_break {
+            program_break
+        } else {
+            maybe_new_program_break
+        };
+        unsafe {
+            accelmemcpy(
+                ph.virtual_addr() as *mut u8,
+                slice.as_ptr().offset(ph.offset() as isize),
+                ph.file_size() as usize,
+            );
+        }
+    }
+    // now initialize all the necessary fields.
+
+    // To free just fpage() all of the `pages`
+    preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
+    preempt::CURRENT_TASK.get().program_break = program_break;
+    preempt::task_alloc(|| unsafe {
+        let ve: Vec<u8> = argvblob.iter().map(|f| *f).collect();
+        preempt::CURRENT_TASK.get().box1 = Some(ve.leak());
+        jump_user(exe.header.pt2.entry_point());
+    });
 }
 unsafe fn jump_user(addr: u64) {
     asm!("

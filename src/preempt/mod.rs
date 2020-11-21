@@ -51,9 +51,11 @@ pub struct Task {
     pub box1: Option<&'static [u8]>,
     pub box2: Option<&'static [u8]>,
     pub program_break: u64,
+    pub is_listening: bool,
+    pub is_done: bool,
 }
-ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0 }] }
-ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0 } }
+ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false }] }
+ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false } }
 extern "C" fn get_next(buf: &mut Jmpbuf) {
     let tq = TASK_QUEUE.get();
     tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = Task {
@@ -64,6 +66,8 @@ extern "C" fn get_next(buf: &mut Jmpbuf) {
         box1: None,
         box2: None,
         program_break: 0,
+        is_listening: false,
+        is_done: false,
     };
     TASK_QUEUE_CUR.store(
         TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
@@ -147,6 +151,8 @@ fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64) {
             box1: None,
             box2: None,
             program_break: 0,
+            is_listening: false,
+            is_done: false,
         });
     });
 }

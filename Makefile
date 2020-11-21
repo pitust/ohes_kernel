@@ -1,5 +1,5 @@
 run: build/oh_es.iso build/hdb.bin
-	qemu-system-x86_64 -hda build/oh_es.iso -serial stdio -s -hdb build/hdb.bin -debugcon file:logz.txt -global isa-debugcon.iobase=0x402
+	qemu-system-x86_64 -hda build/oh_es.iso -serial stdio -s -hdb build/hdb.bin -debugcon file:logz.txt -global isa-debugcon.iobase=0x402 -accel kvm -cpu host
 build/oh_es.iso: build/kernel.elf cfg/grub.cfg
 	rm -rf iso
 	mkdir -p iso/boot/grub
