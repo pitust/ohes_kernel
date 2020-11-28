@@ -14,10 +14,26 @@ use x86_64::{registers::control::Cr3, structures::paging::page_table::PageTableE
 use x86_64::{PhysAddr, VirtAddr};
 // pub static PHBASE: AtomicUsize = AtomicUsize::new(0);
 pub mod allocator;
+pub fn munmap(area: VirtAddr) {
+    let u = crate::memory::get_mapper()
+        .unmap(Page::<Size4KiB>::containing_address(area))
+        .unwrap()
+        .1;
+    u.flush();
+}
+pub fn try_munmap(area: VirtAddr) {
+    match crate::memory::get_mapper().unmap(Page::<Size4KiB>::containing_address(area)) {
+        Ok(o) => {
+            o.1.flush();
+        }
+        Err(_) => {}
+    }
+}
 pub fn map_to(from: VirtAddr, to: VirtAddr, flags: PageTableFlags) {
     let frame = PhysFrame::<Size4KiB>::containing_address(crate::memory::translate(from).unwrap());
     let flags = PageTableFlags::PRESENT | flags;
-
+    println!("map {:?} -> {:?}", from, to);
+    try_munmap(to);
     let map_to_result = unsafe {
         crate::memory::get_mapper().map_to(
             Page::containing_address(to),

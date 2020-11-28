@@ -58,17 +58,9 @@ ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: cra
 ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false } }
 extern "C" fn get_next(buf: &mut Jmpbuf) {
     let tq = TASK_QUEUE.get();
-    tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = Task {
-        state: *buf,
-        rsp0: crate::interrupts::get_rsp0(),
-        rsp_ptr: crate::userland::get_rsp_ptr(),
-        pid: 1,
-        box1: None,
-        box2: None,
-        program_break: 0,
-        is_listening: false,
-        is_done: false,
-    };
+    let mut ct = CURRENT_TASK.clone();
+    ct.state = buf.clone();
+    tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = ct;
     TASK_QUEUE_CUR.store(
         TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
         Ordering::Relaxed,

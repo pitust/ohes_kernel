@@ -3,7 +3,7 @@ use x86_64::{
     structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB},
     VirtAddr,
 };
-use xmas_elf;
+use xmas_elf::{self, program::Type};
 static X: AtomicUsize = AtomicUsize::new(0);
 
 fn read_from_user<T>(ptr: *mut T) -> &'static T {
@@ -20,10 +20,10 @@ pub fn ensure_region_safe(ptr: *mut u8, len: usize) {
         panic!("Security violation: read attempted from {:p}", ptr);
     }
 }
-fn user_gets(mut ptr: *mut u8) -> String {
+fn user_gets(mut ptr: *mut u8, n: u64) -> String {
     let mut s = "".to_string();
     unsafe {
-        while *read_from_user(ptr) != 0 {
+        for _ in 0..n {
             s += &((*read_from_user(ptr)) as char).to_string();
             ptr = ptr.offset(1);
         }
@@ -115,7 +115,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         5 => {
             /* sys_send */
-            let target = user_gets(arg1 as *mut u8);
+            let target = user_gets(arg1 as *mut u8, arg2);
             x86_64::instructions::interrupts::without_interrupts(|| {
                 // if ksvc::KSVC_TABLE {
 
@@ -145,7 +145,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         6 => {
             /* sys_listen */
-            let name = user_gets(arg1 as *mut u8);
+            let name = user_gets(arg1 as *mut u8, arg2);
             preempt::CURRENT_TASK.get().is_listening = false;
             SVC_MAP.get().insert(name, preempt::CURRENT_TASK.pid);
             0
@@ -153,7 +153,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         7 => {
             /* sys_accept */
             assert_eq!(
-                *SVC_MAP.get().get(&user_gets(arg1 as *mut u8)).unwrap(),
+                *SVC_MAP
+                    .get()
+                    .get(&user_gets(arg1 as *mut u8, arg2))
+                    .unwrap(),
                 preempt::CURRENT_TASK.pid
             );
             preempt::CURRENT_TASK.get().is_done = false;
@@ -189,16 +192,18 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         10 => {
             /* sys_klog */
-            println!("[klog] {}", user_gets(arg1 as *mut u8));
+            println!("[klog] {}", user_gets(arg1 as *mut u8, arg2));
             0
         }
         11 => {
             /* sys_sbrk */
             let len = arg1;
+            println!("[sbrk] BRK'ing {} bytes", len);
             let oldbrk = preempt::CURRENT_TASK.program_break;
             let newbrk = ((oldbrk + len + 4095) / 4096) * 4096;
+            println!("[sbrk] {:#x?} => {:#x?}", oldbrk, newbrk);
             preempt::CURRENT_TASK.get().program_break = newbrk;
-            for i in 0..((newbrk - oldbrk) / 4096) {
+            for i in 0..(((newbrk - oldbrk) / 4096) + 1) {
                 let pageaddr = oldbrk + i * 4096;
 
                 let data = crate::memory::mpage();
@@ -212,7 +217,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
                 );
             }
-
+            dbg!(preempt::CURRENT_TASK.get().program_break);
             return newbrk;
         }
         _ => (-1 as i64) as u64,
@@ -253,7 +258,6 @@ pub unsafe fn new_syscall_trampoline() {
         mov rbp, rsp
         mov rsp, [RSP_PTR]
         push rbp
-        push rax
         push rbx
         push rcx
         push rdx
@@ -271,7 +275,6 @@ pub unsafe fn new_syscall_trampoline() {
         pop rdx
         pop rcx
         pop rbx
-        pop rax
         pop rbp
         mov rsp, rbp
         pop rbp
@@ -326,49 +329,52 @@ pub fn loaduser() {
     let exe = xmas_elf::ElfFile::new(slice).unwrap();
     let mut program_break: u64 = 0xFFFF800000000000;
     for ph in exe.program_iter() {
-        let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
-        if ph.flags().is_read() {
+        if ph.get_type().unwrap() == Type::Load {
+            let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
+            // if ph.flags().is_read() {
             flags |= PageTableFlags::USER_ACCESSIBLE;
-        }
-        if ph.flags().is_execute() {
+            // }
+            // if ph.flags().is_execute() {
             flags ^= PageTableFlags::NO_EXECUTE;
-        }
-        if ph.flags().is_write() {
+            // }
+            // if ph.flags().is_write() {
             flags |= PageTableFlags::WRITABLE;
-        }
-        println!("Flags: {:?}", flags);
-        let page_count = (ph.file_size() + 4095) / 4096;
-        for i in 0..page_count {
-            let data = crate::memory::mpage();
-            pages.push(data);
-            if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
-                panic!("Invalid target for ELF loader!");
+            // }
+            println!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
+            let page_count = (ph.file_size() + 4095 + (ph.virtual_addr() % 4096)) / 4096;
+            for i in 0..page_count {
+                let data = crate::memory::mpage();
+                pages.push(data);
+                if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
+                    panic!("Invalid target for ELF loader!");
+                }
+                map_to(
+                    VirtAddr::from_ptr(data),
+                    VirtAddr::new(ph.virtual_addr() + (i * 4096)),
+                    flags,
+                );
             }
-            map_to(
-                VirtAddr::from_ptr(data),
-                VirtAddr::new(ph.virtual_addr() + (i * 4096)),
-                flags,
-            );
-        }
-        let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
-        program_break = if maybe_new_program_break < program_break {
-            program_break
-        } else {
-            maybe_new_program_break
-        };
-        unsafe {
-            accelmemcpy(
-                ph.virtual_addr() as *mut u8,
-                slice.as_ptr().offset(ph.offset() as isize),
-                ph.file_size() as usize,
-            );
+            let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
+            program_break = if maybe_new_program_break < program_break {
+                program_break
+            } else {
+                maybe_new_program_break
+            };
+
+            unsafe {
+                accelmemcpy(
+                    ph.virtual_addr() as *mut u8,
+                    slice.as_ptr().offset(ph.offset() as isize),
+                    ph.file_size() as usize,
+                );
+            }
         }
     }
     // now initialize all the necessary fields.
 
     // To free just fpage() all of the `pages`
     preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
-    preempt::CURRENT_TASK.get().program_break = program_break;
+    preempt::CURRENT_TASK.get().program_break = ((program_break + 4095) / 4096) * 4096;
     unsafe {
         jump_user(exe.header.pt2.entry_point());
     }
@@ -391,7 +397,7 @@ pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
         if ph.flags().is_write() {
             flags |= PageTableFlags::WRITABLE;
         }
-        println!("Flags: {:?}", flags);
+        println!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
         let page_count = (ph.file_size() + 4095) / 4096;
         for i in 0..page_count {
             let data = crate::memory::mpage();

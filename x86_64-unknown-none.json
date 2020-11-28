@@ -16,5 +16,6 @@
         "ld.lld": [
             "/opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a", "--allow-multiple-definition", "-T/home/pitust/code/an_os/link.ld"
         ]
-    }
+    },
+    "eliminate-frame-pointer": false
 }
