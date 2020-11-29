@@ -1,4 +1,4 @@
-use crate::println;
+use crate::{println, dprintln};
 use alloc::{alloc::Layout, vec::Vec};
 // use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 use crate::shittymutex::Mutex;
@@ -35,7 +35,7 @@ pub fn map_to(from: VirtAddr, to: VirtAddr, flags: PageTableFlags) {
     }
     let frame = PhysFrame::<Size4KiB>::containing_address(crate::memory::translate(from).unwrap());
     let flags = PageTableFlags::PRESENT | flags;
-    println!("map {:?} -> {:?}", from, to);
+    dprintln!("map {:?} -> {:?}", from, to);
     let map_to_result = unsafe {
         crate::memory::get_mapper().map_to(
             Page::containing_address(to),

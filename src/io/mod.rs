@@ -154,8 +154,8 @@ impl Write for Printer {
 impl Write for DbgPrinter {
     fn write_str(&mut self, s: &str) -> Result {
         match IO_DEVS.get().force_maybeinitdev() {
-            MaybeInitDevice::GotMman(mmaned, dbgdevs) => {
-                for mm in mmaned {
+            MaybeInitDevice::GotMman(_mmaned, dbgdevs) => {
+                for mm in dbgdevs {
                     mm.write_str(s);
                 }
             }

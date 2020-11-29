@@ -196,10 +196,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         11 => {
             /* sys_sbrk */
             let len = arg1;
-            println!("[sbrk] BRK'ing {} bytes", len);
+            dprintln!("[sbrk] BRK'ing {} bytes", len);
             let oldbrk = preempt::CURRENT_TASK.program_break;
             let newbrk = ((oldbrk + len + 4095) / 4096) * 4096;
-            println!("[sbrk] {:#x?} => {:#x?}", oldbrk, newbrk);
+            dprintln!("[sbrk] {:#x?} => {:#x?}", oldbrk, newbrk);
             preempt::CURRENT_TASK.get().program_break = newbrk;
             for i in 0..(((newbrk - oldbrk) / 4096) + 1) {
                 let pageaddr = oldbrk + i * 4096;
@@ -327,7 +327,7 @@ pub fn loaduser() {
             // if ph.flags().is_write() {
             flags |= PageTableFlags::WRITABLE;
             // }
-            println!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
+            dprintln!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
             let page_count = (ph.file_size() + 4095 + (ph.virtual_addr() % 4096)) / 4096;
             for i in 0..page_count {
                 let data = crate::memory::mpage();
@@ -384,7 +384,7 @@ pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
         if ph.flags().is_write() {
             flags |= PageTableFlags::WRITABLE;
         }
-        println!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
+        dprintln!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
         let page_count = (ph.file_size() + 4095) / 4096;
         for i in 0..page_count {
             let data = crate::memory::mpage();
