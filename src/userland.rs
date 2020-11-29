@@ -4,7 +4,6 @@ use x86_64::{
     VirtAddr,
 };
 use xmas_elf::{self, program::Type};
-static X: AtomicUsize = AtomicUsize::new(0);
 
 fn read_from_user<T>(ptr: *mut T) -> &'static T {
     if ptr as u64 >= 0xFFFF800000000000 {
@@ -57,8 +56,6 @@ fn freebox2() {
     };
 }
 pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
-    println!("syscall {:x} {} {}", sysno, arg1, arg2);
-    X.store(1, Ordering::Relaxed);
     match sysno {
         0 => {
             /* sys_exit */
@@ -117,9 +114,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             /* sys_send */
             let target = user_gets(arg1 as *mut u8, arg2);
             x86_64::instructions::interrupts::without_interrupts(|| {
-                // if ksvc::KSVC_TABLE {
-
-                // }
+                if ksvc::KSVC_TABLE.contains_key(&target) {
+                    ksvc::KSVC_TABLE.get().get(&target).unwrap()();
+                    return;
+                }
                 let p = *SVC_MAP.get().get(&target).unwrap();
                 for r in preempt::TASK_QUEUE.get().iter_mut() {
                     if p == r.pid {
@@ -192,7 +190,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         10 => {
             /* sys_klog */
-            println!("[klog] {}", user_gets(arg1 as *mut u8, arg2));
+            print!("{}", user_gets(arg1 as *mut u8, arg2));
             0
         }
         11 => {
@@ -280,7 +278,6 @@ pub unsafe fn new_syscall_trampoline() {
         pop rbp
         pop r11
         pop rcx
-        sti
     just_a_brk:
         sysretq
     .global RSP_PTR
@@ -303,14 +300,6 @@ unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
     }
     faster_rlibc::fastermemcpy(to, from, size & 0xfffffffffffffff8);
 }
-fn second() {
-    loop {
-        if X.load(Ordering::Relaxed) == 1 {
-            println!("Second thread got here");
-            break;
-        }
-    }
-}
 ezy_static! { PID_COUNTER, u64, 1 }
 pub fn mkpid(ppid: u64) -> u64 {
     let r = (*PID_COUNTER.get() << 1) | (ppid & 1);
@@ -322,8 +311,6 @@ pub fn getpid() -> u64 {
 }
 pub fn loaduser() {
     init_rsp_ptr();
-    // let's test multitasking
-    crate::preempt::task_alloc(second);
     let slice = include_bytes!("../build/test.elf");
     let mut pages: Vec<*mut u8> = vec![];
     let exe = xmas_elf::ElfFile::new(slice).unwrap();

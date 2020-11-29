@@ -30,10 +30,12 @@ pub fn try_munmap(area: VirtAddr) {
     }
 }
 pub fn map_to(from: VirtAddr, to: VirtAddr, flags: PageTableFlags) {
+    if translate(to).is_some() {
+        return;
+    }
     let frame = PhysFrame::<Size4KiB>::containing_address(crate::memory::translate(from).unwrap());
     let flags = PageTableFlags::PRESENT | flags;
     println!("map {:?} -> {:?}", from, to);
-    try_munmap(to);
     let map_to_result = unsafe {
         crate::memory::get_mapper().map_to(
             Page::containing_address(to),

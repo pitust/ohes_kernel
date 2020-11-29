@@ -129,6 +129,9 @@ pub fn init(boot_info: &'static multiboot2::BootInformation) {
             }
         }
     });
+    run_task("ksvc", || {
+        ksvc::ksvc_init();
+    });
     run_task("enable_int", || {
         x86_64::instructions::interrupts::enable();
     });

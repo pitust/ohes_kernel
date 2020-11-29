@@ -1,7 +1,7 @@
 pub use crate::shittymutex::Mutex;
 pub use crate::*;
 pub use crate::{
-    _ezy_static, counter, dbg, debug_println, ezy_static, input, io::Printer, print, println,
+    _ezy_static, counter, dbg, dprintln, dprint, ezy_static, input, io::Printer, print, println,
     testing,
 };
 pub use alloc::{boxed::Box, collections::*, collections::*, string::*, vec, vec::Vec};

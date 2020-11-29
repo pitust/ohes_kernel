@@ -27,7 +27,7 @@ pub static CB: AtomicUsize = AtomicUsize::new(255);
 pub mod device;
 
 pub enum MaybeInitDevice {
-    GotMman(alloc::vec::Vec<Box<dyn device::IODevice>>),
+    GotMman(alloc::vec::Vec<Box<dyn device::IODevice>>, alloc::vec::Vec<Box<dyn device::IODevice>>),
     NoMman,
 }
 
@@ -38,6 +38,7 @@ impl MaybeInitDevice {
 }
 
 pub struct Printer;
+pub struct DbgPrinter;
 lazy_static! {
     pub static ref IO_DEVS: Mutex<MaybeInitDevice> = Mutex::new(MaybeInitDevice::NoMman);
 }
@@ -47,38 +48,58 @@ pub fn proper_init_for_iodevs(mbstruct: &'static multiboot2::BootInformation) {
     // first, parse out kcmdline
     let kcmdline = mbstruct.command_line_tag().unwrap().command_line();
     let mut devs: alloc::vec::Vec<Box<dyn device::IODevice>> = alloc::vec![];
+    let mut ddevs: alloc::vec::Vec<Box<dyn device::IODevice>> = alloc::vec![];
+    let mut nid = false;
     for op in kcmdline.split(" ") {
         if op.starts_with("debugcon=") {
             let debugcon_addr = op.split_at(8).1.parse().unwrap();
             devs.push(box device::debugcon::DebugCon {
                 port: debugcon_addr,
             });
+            if nid { ddevs.push(box device::debugcon::DebugCon {
+                port: debugcon_addr,
+            }); }
         }
         if op.starts_with("serial=") {
             let debugcon_addr = op.split_at(7).1.parse().unwrap();
             devs.push(box device::serial::Serial::new(debugcon_addr));
+            if nid { ddevs.push(box device::serial::Serial::new(debugcon_addr)); }
         }
         if op == "default_serial" {
             devs.push(box device::serial::Serial::new(0x3F8));
+            if nid { ddevs.push(box device::debugcon::DebugCon { port: 0x402 }); }
         }
         if op == "default_debugcon" {
             devs.push(box device::debugcon::DebugCon { port: 0x402 });
+            if nid { ddevs.push(box device::serial::Serial::new(0x3F8)); }
         }
         if op == "textvga" {
             devs.push(box device::multiboot_text::MultibootText::new(
                 mbstruct.framebuffer_tag().unwrap(),
             ));
+            if nid { ddevs.push(box device::multiboot_text::MultibootText::new(
+                mbstruct.framebuffer_tag().unwrap(),
+            )); }
         }
         if op == "graphicz" {
             devs.push(box device::multiboot_vga::MultibootVGA::new(
                 mbstruct.framebuffer_tag().unwrap(),
             ));
+            if nid { ddevs.push(box device::multiboot_vga::MultibootVGA::new(
+                mbstruct.framebuffer_tag().unwrap(),
+            )); }
         }
         if op == "kbdint" {
             devs.push(box device::kbdint_input::KbdInt {});
+            if nid { ddevs.push(box device::kbdint_input::KbdInt {}); }
+        }
+        if op == "debug:" {
+            nid = true;
+        } else {
+            nid = false;
         }
     }
-    *IO_DEVS.get() = MaybeInitDevice::GotMman(devs);
+    *IO_DEVS.get() = MaybeInitDevice::GotMman(devs, ddevs);
     Printer
         .write_fmt(format_args!("Done kernel commandline: {}\n", kcmdline))
         .unwrap();
@@ -112,7 +133,28 @@ impl Printer {
 impl Write for Printer {
     fn write_str(&mut self, s: &str) -> Result {
         match IO_DEVS.get().force_maybeinitdev() {
-            MaybeInitDevice::GotMman(mmaned) => {
+            MaybeInitDevice::GotMman(mmaned, dbgdevs) => {
+                for mm in mmaned {
+                    mm.write_str(s);
+                }
+            }
+            MaybeInitDevice::NoMman => {
+                if crate::constants::should_debug_log() {
+                    for c in s.chars() {
+                        unsafe {
+                            x86::io::outb(0x402, c as u8);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+impl Write for DbgPrinter {
+    fn write_str(&mut self, s: &str) -> Result {
+        match IO_DEVS.get().force_maybeinitdev() {
+            MaybeInitDevice::GotMman(mmaned, dbgdevs) => {
                 for mm in mmaned {
                     mm.write_str(s);
                 }
@@ -135,6 +177,10 @@ impl Write for Printer {
 macro_rules! print {
     ($($arg:tt)*) => ($crate::io::print_out(format_args!($($arg)*)));
 }
+#[macro_export]
+macro_rules! dprint {
+    ($($arg:tt)*) => ($crate::io::dprint_out(format_args!($($arg)*)));
+}
 
 #[macro_export]
 macro_rules! println {
@@ -143,9 +189,9 @@ macro_rules! println {
 }
 
 #[macro_export]
-macro_rules! debug_println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => { if $crate::constants::should_debug_log() { $crate::print!("{}\n", format_args!($($arg)*)); } }
+macro_rules! dprintln {
+    () => ($crate::dprint!("\n"));
+    ($($arg:tt)*) => ($crate::dprint!("{}\n", format_args!($($arg)*)));
 }
 
 #[macro_export]
@@ -308,7 +354,7 @@ impl<
             return Poll::Ready(String::from(self_ref.text.as_str()));
         }
         let k = (|| match IO_DEVS.get().force_maybeinitdev() {
-            MaybeInitDevice::GotMman(d) => {
+            MaybeInitDevice::GotMman(d, d2) => {
                 for k in d {
                     match k.read_chr() {
                         Some(k) => {
@@ -377,4 +423,9 @@ macro_rules! input {
 #[doc(hidden)]
 pub fn print_out(args: Arguments) {
     Printer.write_fmt(args).expect("Write failed");
+}
+
+#[doc(hidden)]
+pub fn dprint_out(args: Arguments) {
+    DbgPrinter.write_fmt(args).expect("Write failed");
 }

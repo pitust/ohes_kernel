@@ -34,7 +34,7 @@ cpp_demangle = { version = "0.3.1", default-features = false, features = ["alloc
 serde = { version = "1.0.117", default-features = false, features = ["alloc"] }
 serde_json = { version = "1.0.59", default-features = false, features = ["alloc"] }
 serde_derive = "1.0.117"
-postcard = "0.5.1"
+postcard = { version = "0.5.1", features = ["alloc"] }
 multiboot2 = "0.9.0"
 fontdue = "0.4.0"
 x86 = "0.34.0"
