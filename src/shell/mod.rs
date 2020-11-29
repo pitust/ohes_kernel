@@ -104,6 +104,8 @@ pub async fn shell() {
     ecmd!(panic, panic!("You asked for it..."));
     ecmd!(user, crate::userland::loaduser());
     ecmd!(gptt, drive::gpt::test0());
+    ecmd!(pci, crate::pci::testing());
+    
     loop {
         print!("$ ");
         let im = Mutex::new(Z { x: ch.len() });
