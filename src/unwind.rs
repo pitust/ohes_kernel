@@ -52,6 +52,7 @@ pub fn register_module(kernel: &[u8]) {
                 // yay!
                 // addr is s.address()
                 // len is s.size()
+                dprintln!("Got framez");
                 unsafe {
                     __register_frame(s.address() as *mut c_void, s.size() as usize);
                 }

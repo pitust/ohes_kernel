@@ -76,11 +76,12 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 None => {}
             };
             let mut p = vec![];
-            p.reserve_exact(arg2 as usize);
+            p.resize(arg2 as usize, 0);
             unsafe {
                 accelmemcpy(p.as_mut_ptr(), arg1 as *const u8, arg2 as usize);
             }
             preempt::CURRENT_TASK.get().box1 = Some(Box::leak(p.into_boxed_slice()));
+            println!("{:?}", preempt::CURRENT_TASK.get().box1);
             0
         }
         2 => {

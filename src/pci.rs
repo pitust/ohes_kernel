@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use x86_64::instructions::port::Port;
 pub const CONFIG_ADDRESS: u16 = 0xCF8;
 pub const CONFIG_DATA: u16 = 0xCFC;
-pub const PCI_TABLE: &str = include_str!("../pci.txt");
+// pub const PCI_TABLE: &str = include_str!("../pci.txt");
 // Ported from C, original at https://wiki.osdev.org/PCI
 fn pci_read16(bus: u8, slot: u8, func: u8, offset: u8) -> u16 {
     let mut addrp: Port<u32> = Port::new(CONFIG_ADDRESS);
@@ -49,31 +49,31 @@ fn to_int(c: &str) -> Option<u16> {
     return Some(r);
 }
 pub fn idlookup(vendor: u16, dev: u16) -> Option<String> {
-    let vec = PCI_TABLE.split('\n');
-    let mut iscv = false;
-    for x in vec {
-        if x.len() < 4 {
-            continue;
-        }
-        let lelr = to_int(x.clone().split_at(4).0);
-        if lelr == Some(vendor) {
-            println!("Found co. for {}", dev);
-            iscv = true;
-        } else if lelr.is_some() {
-            if iscv {
-                return None;
-            }
-            iscv = false;
-        } else if iscv {
-            if x.len() < 8 {
-                continue;
-            }
-            let lelr2 = to_int(x.clone().split_at(5).0.split_at(1).1);
-            if lelr2.is_some() && lelr2 == Some(dev) {
-                return Some(x.clone().split_at(7).1.to_string());
-            }
-        }
-    }
+    // let vec = PCI_TABLE.split('\n');
+    // let mut iscv = false;
+    // for x in vec {
+    //     if x.len() < 4 {
+    //         continue;
+    //     }
+    //     let lelr = to_int(x.clone().split_at(4).0);
+    //     if lelr == Some(vendor) {
+    //         println!("Found co. for {}", dev);
+    //         iscv = true;
+    //     } else if lelr.is_some() {
+    //         if iscv {
+    //             return None;
+    //         }
+    //         iscv = false;
+    //     } else if iscv {
+    //         if x.len() < 8 {
+    //             continue;
+    //         }
+    //         let lelr2 = to_int(x.clone().split_at(5).0.split_at(1).1);
+    //         if lelr2.is_some() && lelr2 == Some(dev) {
+    //             return Some(x.clone().split_at(7).1.to_string());
+    //         }
+    //     }
+    // }
     return None;
 }
 
