@@ -59,7 +59,7 @@ fn panic(info: &PanicInfo) -> ! {
     x86_64::instructions::interrupts::disable();
     io::Printer.set_color(255, 0, 0);
     println!("Panic: {}", info);
-    unwind::backtrace();
+    // unwind::backtrace();
     exiting::exit_fail();
 }
 
@@ -90,9 +90,9 @@ pub fn forkp() {
         );
     }
 }
-
 #[no_mangle]
-extern "C" fn kmain(boot_info_ptr: u64) -> ! {
+pub extern "C" fn kmain(boot_info_ptr: u64) -> ! {
+    // ralloc::Allocator
     let ptr = unsafe { multiboot2::load(boot_info_ptr as usize) };
     let boot_info = unsafe { &*((&ptr) as *const BootInformation) as &'static BootInformation };
     constants::check_const_correct();

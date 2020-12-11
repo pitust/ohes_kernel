@@ -120,7 +120,11 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(DOUBLE_FAULT_IST_INDEX);
         }
-        idt.page_fault.set_handler_fn(page_fault_handler);
+        unsafe {
+            idt.page_fault
+                .set_handler_fn(page_fault_handler)
+                .set_stack_index(PAGE_FAULT_STACK_INDEX);
+        }
         idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
         idt.general_protection_fault.set_handler_fn(gpe);
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
@@ -166,6 +170,7 @@ extern "x86-interrupt" fn gpe(stack_frame: &mut InterruptStackFrame, error_code:
     panic!("#GP at: \n{:#?}\nError code: {}", stack_frame, error_code);
 }
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: &mut InterruptStackFrame) -> () {
+    loop {}
     panic!("Invalid opcode at: \n{:#?}", stack_frame);
 }
 

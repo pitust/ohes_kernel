@@ -8,34 +8,9 @@ checksum = "e8fd72866655d1904d6b0997d0b07ba561047d070fbe29de039031c641b61217"
 
 [[package]]
 name = "an_os"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
- "bitflags",
- "conquer-once",
- "cpp_demangle",
- "crossbeam-queue",
- "fallible-iterator",
- "faster_rlibc",
- "font8x8",
- "fontdue",
- "gimli",
- "hex",
- "kmacros",
- "lazy_static",
- "libc",
- "linked_list_allocator",
- "multiboot2",
- "pc-keyboard",
- "pic8259_simple",
- "postcard",
- "ralloc",
- "safety-here",
- "serde",
- "serde_derive",
- "serde_json",
- "x86",
- "x86_64",
- "xmas-elf",
+ "ralloc_shim",
 ]
 
 [[package]]
@@ -82,9 +57,9 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "cc"
-version = "1.0.62"
+version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1770ced377336a88a67c473594ccc14eca6f4559217c34f64aac8f83d641b40"
+checksum = "95752358c8f7552394baf48cd82695b345628ad3f170d607de3ca03b8dacca15"
 
 [[package]]
 name = "cfg-if"
@@ -115,9 +90,9 @@ checksum = "654fb2472cc369d311c547103a1fa81d467bef370ae7a0680f65939895b1182a"
 
 [[package]]
 name = "cpp_demangle"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6656dbc7c586cf2965887c3d066d9b983b20400bc2d52ed4cc5e33d0ceb2c602"
+checksum = "44919ecaf6f99e8e737bc239408931c9a01e9a6c74814fee8242dd2506b65390"
 dependencies = [
  "cfg-if 1.0.0",
  "glob",
@@ -165,9 +140,9 @@ dependencies = [
 
 [[package]]
 name = "font8x8"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1af980b6214598a826a6c0865385910e36b4c2ab64358306a8342db2eff3e17e"
+checksum = "e63201c624b8c8883921b1a1accc8916c4fa9dbfb15d122b26e4dde945b86bbf"
 
 [[package]]
 name = "fontdue"
@@ -371,17 +346,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "ralloc"
-version = "1.0.1"
-source = "git+https://gitlab.redox-os.org/redox-os/ralloc.git#e87746c105bd023b3f99faab2bd89a9610aef968"
-dependencies = [
- "ralloc_shim",
- "unborrow",
-]
-
-[[package]]
 name = "ralloc_shim"
 version = "0.1.1"
+dependencies = [
+ "bitflags",
+ "conquer-once",
+ "cpp_demangle",
+ "crossbeam-queue",
+ "fallible-iterator",
+ "faster_rlibc",
+ "font8x8",
+ "fontdue",
+ "gimli",
+ "hex",
+ "kmacros",
+ "lazy_static",
+ "libc",
+ "linked_list_allocator",
+ "multiboot2",
+ "pc-keyboard",
+ "pic8259_simple",
+ "postcard",
+ "safety-here",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "x86",
+ "x86_64",
+ "xmas-elf",
+]
 
 [[package]]
 name = "raw-cpuid"
@@ -491,9 +484,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "syn"
-version = "1.0.48"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc371affeffc477f42a221a1e4297aedcea33d47d19b61455588bd9d8f6b19ac"
+checksum = "8833e20724c24de12bbaba5ad230ea61c3eafb05b881c7c9d3cfe8638b187e68"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -511,12 +504,6 @@ name = "typenum"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373c8a200f9e67a0c95e62a4f52fbf80c23b4381c05a17845531982fa99e6b33"
-
-[[package]]
-name = "unborrow"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e92e959f029e4f8ee25d70d15ab58d2b46f98a17bc238b9265ff0c26f6f3d67f"
 
 [[package]]
 name = "unicode-xid"

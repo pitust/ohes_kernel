@@ -21,10 +21,10 @@ impl Serial {
 }
 impl IODevice for Serial {
     fn write_str(&mut self, s: &str) {
-        for c in s.chars() {
+        for c in s.as_bytes() {
             while unsafe { inb(self.se + 5) & 0x20 } == 0 {}
             unsafe {
-                outb(self.se, c as u8);
+                outb(self.se, *c);
             }
         }
     }

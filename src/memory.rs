@@ -13,6 +13,9 @@ use x86_64::structures::paging::{
 use x86_64::{registers::control::Cr3, structures::paging::page_table::PageTableEntry};
 use x86_64::{PhysAddr, VirtAddr};
 // pub static PHBASE: AtomicUsize = AtomicUsize::new(0);
+
+
+
 pub mod allocator;
 pub fn munmap(area: VirtAddr) {
     let u = crate::memory::get_mapper()
@@ -35,7 +38,6 @@ pub fn map_to(from: VirtAddr, to: VirtAddr, flags: PageTableFlags) {
     }
     let frame = PhysFrame::<Size4KiB>::containing_address(crate::memory::translate(from).unwrap());
     let flags = PageTableFlags::PRESENT | flags;
-    dprintln!("map {:?} -> {:?}", from, to);
     let map_to_result = unsafe {
         crate::memory::get_mapper().map_to(
             Page::containing_address(to),
@@ -125,6 +127,10 @@ pub struct BootInfoFrameAllocator {
     memory_map: &'static MemoryMapTag,
 }
 
+extern {
+    static ee: u8;
+}
+
 impl BootInfoFrameAllocator {
     pub unsafe fn init(memory_map: &'static MemoryMapTag) -> Self {
         BootInfoFrameAllocator { memory_map }
@@ -134,7 +140,7 @@ impl BootInfoFrameAllocator {
         let usable_regions = regions.filter(|r| r.typ() == MemoryAreaType::Available);
         let addr_ranges = usable_regions.map(|r| r.start_address()..r.end_address());
         let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-        frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
+        frame_addresses.filter(|p| unsafe { core::mem::transmute::<&u8, u64>(&ee) < *p }).map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
     }
     pub fn show(&self) {
         let x: Vec<PhysFrame<Size4KiB>> = self.usable_frames().collect();
@@ -193,4 +199,14 @@ pub fn fpage(el: *mut u8) {
         crate::memory::allocator::WRAPPED_ALLOC
             .dealloc(el, Layout::from_size_align(4096, 4096).unwrap())
     };
+}
+#[no_mangle]
+pub fn brk(to: *const u8) -> *mut u8 {
+    // yeee
+    if to == 0 as *const u8 {
+        return allocator::CUR_ADDR_PUB.load(Ordering::Relaxed) as *mut u8;
+    }
+    let data = allocator::CUR_ADDR_PUB.load(Ordering::Relaxed);
+    allocator::expand_by((to as u64) - data);
+    to as *mut u8
 }

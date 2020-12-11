@@ -45,18 +45,11 @@ impl GetGPTPartitions for dyn RODev {
         let mut p = vec![];
         let a = self.read_from(1).unwrap();
         let efi_magic = String::from_utf8(a.split_at(8).0.to_vec()).unwrap();
-        println!("efi magic: {}", efi_magic);
         if efi_magic != "EFI PART" {
             panic!("Invalid efi drive");
         }
         let startlba = unsafe { *(a.as_ptr().offset(0x48) as *mut u64) };
         let partc = unsafe { *(a.as_ptr().offset(0x50) as *mut u32) };
-        println!("Start LBA is {}", startlba);
-        println!("Partition count is {}", partc);
-        println!(
-            "Drive GUID: {}",
-            prntguuid(a.split_at(0x38).1.split_at(16).0)
-        );
         let mut data = vec![];
         for i in 0..(((partc as u32) + 3) / 4) {
             let dat = self.read_from(i + (startlba as u32)).unwrap();
@@ -64,7 +57,6 @@ impl GetGPTPartitions for dyn RODev {
                 data.push(de);
             }
         }
-        dbg!(data.len());
         // 0x0	16	Partition Type GUID (zero means unused entry)
         // 0x10	16	Unique Partition GUID
         // 0x20	8	StartingLBA
@@ -84,10 +76,6 @@ impl GetGPTPartitions for dyn RODev {
             if parttype == "00000000-0000-0000-000000000000" {
                 continue;
             }
-            println!(
-                "Partition: type={} id={} name={}",
-                parttype, partid, partname
-            );
             p.push(GPTPart {
                 name: partname,
                 guid: partid,

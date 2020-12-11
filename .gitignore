@@ -1,4 +1,5 @@
 /target
+/shm/target
 initrd.cpio
 logz.txt
 /initrd

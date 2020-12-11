@@ -81,7 +81,6 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 accelmemcpy(p.as_mut_ptr(), arg1 as *const u8, arg2 as usize);
             }
             preempt::CURRENT_TASK.get().box1 = Some(Box::leak(p.into_boxed_slice()));
-            println!("{:?}", preempt::CURRENT_TASK.get().box1);
             0
         }
         2 => {
@@ -197,10 +196,8 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         11 => {
             /* sys_sbrk */
             let len = arg1;
-            dprintln!("[sbrk] BRK'ing {} bytes", len);
             let oldbrk = preempt::CURRENT_TASK.program_break;
             let newbrk = ((oldbrk + len + 4095) / 4096) * 4096;
-            dprintln!("[sbrk] {:#x?} => {:#x?}", oldbrk, newbrk);
             preempt::CURRENT_TASK.get().program_break = newbrk;
             for i in 0..(((newbrk - oldbrk) / 4096) + 1) {
                 let pageaddr = oldbrk + i * 4096;
@@ -208,7 +205,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 let data = crate::memory::mpage();
                 // pages.push(data);
                 if pageaddr < 0xFFFF800000000000 {
-                    panic!("Invalid target for sbrk!");
+                    panic!("Invalid target for sbrk! {:#x?}", pageaddr);
                 }
                 map_to(
                     VirtAddr::from_ptr(data),
@@ -216,7 +213,6 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
                 );
             }
-            dbg!(preempt::CURRENT_TASK.get().program_break);
             return newbrk;
         }
         _ => (-1 as i64) as u64,
@@ -288,18 +284,20 @@ pub unsafe fn new_syscall_trampoline() {
     );
 }
 unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
-    if size < 8 {
-        faster_rlibc::memcpy(to, from, size);
-        return;
-    }
-    if size & 0x07 != 0 {
-        faster_rlibc::memcpy(
-            to.offset((size & 0xfffffffffffffff8) as isize),
-            from.offset((size & 0xfffffffffffffff8) as isize),
-            size & 0x07,
-        );
-    }
-    faster_rlibc::fastermemcpy(to, from, size & 0xfffffffffffffff8);
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        if size < 8 {
+            faster_rlibc::memcpy(to, from, size);
+            return;
+        }
+        if size & 0x07 != 0 {
+            faster_rlibc::memcpy(
+                to.offset((size & 0xfffffffffffffff8) as isize),
+                from.offset((size & 0xfffffffffffffff8) as isize),
+                size & 0x07,
+            );
+        }
+        faster_rlibc::fastermemcpy(to, from, size & 0xfffffffffffffff8);
+    });
 }
 ezy_static! { PID_COUNTER, u64, 1 }
 pub fn mkpid(ppid: u64) -> u64 {
@@ -348,7 +346,6 @@ pub fn loaduser() {
             } else {
                 maybe_new_program_break
             };
-
             unsafe {
                 accelmemcpy(
                     ph.virtual_addr() as *mut u8,

@@ -117,38 +117,38 @@ pub fn handle_super_block(data: &[u8]) -> SuperBlock {
         first_non_reserved,
         inode_sz,
     };
-    dbg!(total_number_of_inodes_in_file_system);
-    dbg!(total_number_of_blocks_in_file_system);
-    dbg!(number_of_blocks_reserved_for_superuser);
-    dbg!(total_number_of_unallocated_blocks);
-    dbg!(total_number_of_unallocated_inodes);
-    dbg!(block_number_of_the_block_containing_the_superblock);
-    dbg!(log2_blocksize);
-    dbg!(log2_fragment_size);
-    dbg!(number_of_blocks_in_each_block_group);
-    dbg!(number_of_fragments_in_each_block_group);
-    dbg!(number_of_inodes_in_each_block_group);
-    dbg!(last_mount_time);
-    dbg!(last_written_time);
-    dbg!(number_of_times_the_volume_has_been_mounted_since_its_last_consistency_check);
-    dbg!(number_of_mounts_allowed_before_a_consistency_check_must_be_done);
+    // dbg!(total_number_of_inodes_in_file_system);
+    // dbg!(total_number_of_blocks_in_file_system);
+    // dbg!(number_of_blocks_reserved_for_superuser);
+    // dbg!(total_number_of_unallocated_blocks);
+    // dbg!(total_number_of_unallocated_inodes);
+    // dbg!(block_number_of_the_block_containing_the_superblock);
+    // dbg!(log2_blocksize);
+    // dbg!(log2_fragment_size);
+    // dbg!(number_of_blocks_in_each_block_group);
+    // dbg!(number_of_fragments_in_each_block_group);
+    // dbg!(number_of_inodes_in_each_block_group);
+    // dbg!(last_mount_time);
+    // dbg!(last_written_time);
+    // dbg!(number_of_times_the_volume_has_been_mounted_since_its_last_consistency_check);
+    // dbg!(number_of_mounts_allowed_before_a_consistency_check_must_be_done);
     if ext2_signature != 0xef53 {
         panic!("Ext2 mount failed: not ext2");
     }
-    dbg!(file_system_state);
-    dbg!(what_to_do_when_an_error_is_detected);
-    dbg!(minor_portion_of_version);
-    dbg!(posix_time_of_last_consistency_check);
-    dbg!(interval);
-    dbg!(operating_system_id_from_which_the_filesystem_on_this_volume_was_created);
+    // dbg!(file_system_state);
+    // dbg!(what_to_do_when_an_error_is_detected);
+    // dbg!(minor_portion_of_version);
+    // dbg!(posix_time_of_last_consistency_check);
+    // dbg!(interval);
+    // dbg!(operating_system_id_from_which_the_filesystem_on_this_volume_was_created);
     if major_portion_of_version < 1 {
         panic!(
             "Ext2 mount failed: wrong major {}",
             major_portion_of_version
         );
     }
-    dbg!(user_id_that_can_use_reserved_blocks);
-    dbg!(group_id_that_can_use_reserved_blocks);
+    // dbg!(user_id_that_can_use_reserved_blocks);
+    // dbg!(group_id_that_can_use_reserved_blocks);
     return sup;
 }
 bitflags! {
@@ -423,9 +423,10 @@ pub fn cat(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock) -> Vec<u8> {
     let data = readarea(inode_table + (0x80 * (inode as u64 - 1)), 0x80, dev);
     let ino = unsafe { *(data.as_ptr() as *const Inode) }.clone();
     drop(data);
+    
     let f = Ext2InodeAttr::from_bits(ino.perms).unwrap();
     assert!(f.contains(Ext2InodeAttr::REGULARFILE) || f.contains(Ext2InodeAttr::SYMLINK));
-    read_from_inode(ino, dev, sb)
+    read_from_inode(ino, dev, sb).split_at(ino.size as usize).0.to_vec()
 }
 pub fn stat(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock) -> Ext2InodeAttr {
     let group = inode / sb.inode_per_group;
@@ -442,6 +443,9 @@ pub fn tree(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock, s: String) {
     let mut c = 0;
     let dlen = d.len();
     for (nm, ino) in d {
+        if nm.starts_with(".") {
+            continue;
+        }
         let flags = stat(dev, *ino, sb);
         if c + 1 == dlen {
             println!("{}\\- {} ({})", s.clone(), nm, flags.to_str());
@@ -462,4 +466,13 @@ pub fn handle_rodev_with_ext2(mut dev: Box<dyn RODev>) {
         .collect();
     let sup = handle_super_block(b.as_slice());
     tree(&mut dev, 2, &sup, " ".to_string());
+}
+
+pub fn traverse_fs_tree(dev: &mut Box<dyn RODev>, sb: &SuperBlock, path_elems: Vec<String>) -> u32 {
+    let mut inode = 2;
+    for e in path_elems {
+        inode = *readdir(dev, inode, sb).get(&e).unwrap();
+    }
+
+    inode
 }

@@ -216,6 +216,8 @@ macro_rules! dbg {
         ($($crate::dbg!($val)),+,)
     };
 }
+
+
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Copy, Clone)]
 enum EHS {
     None,
@@ -242,7 +244,7 @@ impl<
 {
     pub fn handle_c(&mut self, k: char) -> Poll<String> {
         if self.escape_handling_step == EHS::Bracket {
-            assert_eq!(k, '[', "Wrong escape sent over serial");
+            // assert_eq!(k, '[', "Wrong escape sent over serial");
             self.escape_handling_step = EHS::Value;
             return Poll::Pending;
         }

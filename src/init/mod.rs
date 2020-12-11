@@ -43,6 +43,15 @@ pub fn init(boot_info: &'static multiboot2::BootInformation) {
 
     memory::allocator::init_heap().expect("Heap init failed");
     println!("[kinit] [mman] heap ready.");
+    run_task("idt", || {
+        interrupts::init_idt();
+    });
+    run_task("pit", || {
+        interrupts::init_timer(1);
+    });
+    run_task("gdt", gdt);
+    let b = box 3;
+    println!("{}", b);
     run_task("io.general", || {
         io::proper_init_for_iodevs(boot_info);
     });
@@ -82,13 +91,6 @@ pub fn init(boot_info: &'static multiboot2::BootInformation) {
     run_task("task_queue.init", || {
         preempt::TASK_QUEUE.get();
     });
-    run_task("idt", || {
-        interrupts::init_idt();
-    });
-    run_task("pit", || {
-        interrupts::init_timer(1);
-    });
-    run_task("gdt", gdt);
 
     // Set up syscalls
     run_task("regs", || {

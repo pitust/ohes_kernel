@@ -1,0 +1,22 @@
+{
+    "_init": {
+        "run": [
+            "fail",
+            "-error",
+            "_init is a meta-task that is launched by the init program itself"
+        ],
+        "use_fs": "kfs"
+    },
+    "target:boot": {
+        "trigger_after": "_init",
+        "run": [
+            "kinfo",
+            "-info",
+            "Booted Oh Es!"
+        ],
+        "wants": [
+            "net",
+            "sircs"
+        ]
+    }
+}

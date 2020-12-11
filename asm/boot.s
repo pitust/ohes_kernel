@@ -23,8 +23,8 @@ p3_table:
 p2_table:
     resb 4096
 stack_bottom:
-    ; 32K of stack should be good for a while
-    resb 4096 * 8
+    ; 512K of stack should be good for a while
+    resb 4096 * 64
 stack_top:
 
 section .rodata

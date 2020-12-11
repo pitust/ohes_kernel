@@ -107,7 +107,7 @@ pub async fn shell() {
     ecmd!(pci, crate::pci::testing());
     
     loop {
-        print!("$ ");
+        print!("\x1b[44m\x1b[30m ~ \x1b[0m\x1b[34m\u{e0b0}\x1b[0m ");
         let im = Mutex::new(Z { x: ch.len() });
         let result: String = input!(
             || {

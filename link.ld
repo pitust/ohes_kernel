@@ -43,6 +43,14 @@ SECTIONS
 		*(.got)
 		*(.got.*)
 	}
+	es = .;
+	.eh_frame : ALIGN(4K)
+	{
+		*(.eh_frame)
+		*(.eh_frame.*)
+	}
+	ee = .;
+	esz = ee - es;
  
 	/* The compiler may produce other sections, by default it will put them in
 	   a segment with the same name. Simply add stuff here as needed. */

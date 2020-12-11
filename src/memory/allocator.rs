@@ -1,4 +1,5 @@
 use crate::{print, println};
+// use core::alloc::GlobalAlloc;
 use core::ptr::null_mut;
 use core::{
     alloc::{AllocRef, GlobalAlloc, Layout},
@@ -13,28 +14,18 @@ pub struct WrapperAlloc {}
 pub static WRAPPED_ALLOC: WrapperAlloc = WrapperAlloc {};
 impl WrapperAlloc {
     pub unsafe fn do_alloc(&self, layout: Layout) -> *mut u8 {
-        let l2 = layout.clone();
-        let mut d = ALLOCATOR.get().allocate_first_fit(layout.clone());
-        while d.is_err() {
-            expand_by(layout.size() as u64 * 4);
-            d = ALLOCATOR.get().allocate_first_fit(l2.clone());
-        }
-        return d.unwrap().as_ptr();
+        return ralloc::Allocator.alloc(layout);
     }
     pub unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ALLOCATOR
-            .get()
-            .deallocate(NonNull::new(ptr).unwrap(), layout);
+        return ralloc::Allocator.dealloc(ptr, layout);
     }
 }
 unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        return self.do_alloc(layout);
+        return ralloc::Allocator.alloc(layout);
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ALLOCATOR
-            .get()
-            .deallocate(NonNull::new(ptr).unwrap(), layout);
+        return ralloc::Allocator.dealloc(ptr, layout);
     }
 }
 pub static ALLOCATOR: crate::shittymutex::Mutex<Heap> =
@@ -43,10 +34,13 @@ pub const HEAP_START: usize = 0x100000000;
 pub const HEAP_SIZE: usize = 4 * 1024;
 pub const COW_PAGE: PageTableFlags = PageTableFlags::BIT_10;
 pub const STACK_PAGE: PageTableFlags = PageTableFlags::BIT_11;
-static CUR_ADDR: core::sync::atomic::AtomicU64 =
+pub static CUR_ADDR: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new((HEAP_START + HEAP_SIZE) as u64);
+pub static CUR_ADDR_PUB: core::sync::atomic::AtomicU64 =
     core::sync::atomic::AtomicU64::new((HEAP_START + HEAP_SIZE) as u64);
 
 pub fn expand_by(size: u64) {
+    CUR_ADDR_PUB.fetch_add(size, core::sync::atomic::Ordering::Relaxed);
     let size = ((size + 4095) / 4096) * 4096;
     let num = CUR_ADDR.fetch_add(size, core::sync::atomic::Ordering::Relaxed);
     expand_ram(num, size).expect("Failed expanding RAM");
