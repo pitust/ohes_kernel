@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::task::{simple_executor::SimpleExecutor, Task};
 use core::panic::PanicInfo;
 use multiboot2::BootInformation;
-use x86_64::{registers::control::Cr3, structures::paging::PhysFrame, VirtAddr};
+use x86_64::{VirtAddr, registers::control::{Cr3, Cr3Flags}, structures::paging::{PhysFrame, Size4KiB}};
 use xmas_elf::{self, symbol_table::Entry};
 
 pub fn i2s(n: u32) -> alloc::string::String {
@@ -70,7 +70,7 @@ fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
     panic!("allocation error: {:?}", layout)
 }
 
-pub fn forkp() {
+pub fn forkp() -> (PhysFrame, Cr3Flags) {
     // let's get my pages
     let old_pt = crate::memory::get_l4();
     let new_pt = crate::memory::mpage();
@@ -83,6 +83,9 @@ pub fn forkp() {
         crate::faster_rlibc::fastermemset(new_pt.offset(2048), 0, 2048);
     }
     let flags = Cr3::read().1;
+    let q = PhysFrame::containing_address(
+        crate::memory::translate(VirtAddr::from_ptr(new_pt)).unwrap(),
+    );
     unsafe {
         Cr3::write(
             PhysFrame::containing_address(
@@ -91,6 +94,10 @@ pub fn forkp() {
             flags,
         );
     }
+    (
+        q,
+        flags,
+    )
 }
 #[no_mangle]
 pub extern "C" fn kmain(boot_info_ptr: u64) -> ! {

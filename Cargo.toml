@@ -40,7 +40,7 @@ fontdue = "0.4.0"
 x86 = "0.34.0"
 hex = { version = "0.4", default-features = false }
 bitflags = "1.2.1"
-ralloc = { git = 'https://github.com/pitust/ralloc', features = ["unsafe_no_mutex_lock", "log"], default-features = false }
+ralloc = { git = 'https://github.com/pitust/ralloc', features = ["unsafe_no_mutex_lock"], default-features = false }
 log = { version = "0.4.11", default-features = false }
 acpi = "2.1.0"
 

@@ -61,7 +61,8 @@ fn freebox2() {
     };
 }
 pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
-    match sysno {
+    dprintln!(" ===> enter {} {:#x?}", preempt::CURRENT_TASK.pid, sysno);
+    let v = match sysno {
         0 => {
             /* sys_exit */
             loop {
@@ -120,11 +121,13 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             let target = user_gets(arg1 as *mut u8, arg2);
             if target == "kfs" {
                 ksvc::dofs();
+                dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
                 return 0;
             }
             x86_64::instructions::interrupts::without_interrupts(|| {
                 if ksvc::KSVC_TABLE.contains_key(&target) {
                     ksvc::KSVC_TABLE.get().get(&target).unwrap()();
+                    dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
                     return;
                 }
                 let p = *SVC_MAP.get().get(&target).unwrap();
@@ -159,10 +162,11 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         7 => {
             /* sys_accept */
+            let nejm = user_gets(arg1 as *mut u8, arg2);
             assert_eq!(
                 *SVC_MAP
                     .get()
-                    .get(&user_gets(arg1 as *mut u8, arg2))
+                    .get(&nejm)
                     .unwrap(),
                 preempt::CURRENT_TASK.pid
             );
@@ -180,9 +184,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             /* sys_exec */
             x86_64::instructions::interrupts::without_interrupts(|| {
                 let l = preempt::CURRENT_TASK.box1;
-                let r = preempt::CURRENT_TASK.box2;
-                do_exec(l.unwrap(), r.unwrap());
-                return;
+                do_exec(l.unwrap());
             });
             0
         }
@@ -220,10 +222,14 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
                 );
             }
+            dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
             return newbrk;
         }
         _ => (-1 as i64) as u64,
-    }
+    };
+
+    dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
+    v
 }
 #[no_mangle]
 unsafe extern "C" fn syscall_trampoline_rust(sysno: u64, arg1: u64, arg2: u64) -> u64 {
@@ -292,7 +298,6 @@ pub unsafe fn new_syscall_trampoline() {
 }
 unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
     x86_64::instructions::interrupts::without_interrupts(|| {
-        println!("{:p} {:p} {:#x?}", from, to, size);
         if size < 8 {
             faster_rlibc::memcpy(to, from, size);
             return;
@@ -339,7 +344,6 @@ pub fn loaduser() {
             // if ph.flags().is_write() {
             flags |= PageTableFlags::WRITABLE;
             // }
-            dprintln!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
             let page_count = (ph.file_size() + 4095 + (ph.virtual_addr() % 4096)) / 4096;
             for i in 0..page_count {
                 let data = crate::memory::mpage();
@@ -378,68 +382,60 @@ pub fn loaduser() {
     }
 }
 
-pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
+pub fn do_exec(kernel: &[u8]) {
     let slice = kernel.to_vec();
-    let ve: Vec<u8> = argvblob.iter().map(|f| *f).collect();
-
+    let ve = preempt::CURRENT_TASK.get().box2.take();
     freebox1();
     freebox2();
+    preempt::task_alloc(move || unsafe {
+        x86_64::instructions::interrupts::disable();
+        let path = String::from_utf8(slice).unwrap();
+        let slice = readfs(&path);
 
-    let ocr3 = x86_64::registers::control::Cr3::read();
-    main::forkp();
-    let mut pages: Vec<*mut u8> = vec![];
-    let exe = xmas_elf::ElfFile::new(&slice).unwrap();
-    let mut program_break: u64 = 0xFFFF800000000000;
-    for ph in exe.program_iter() {
-        let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
-        flags |= PageTableFlags::USER_ACCESSIBLE;
-        flags ^= PageTableFlags::NO_EXECUTE;
-        flags |= PageTableFlags::WRITABLE;
-        dprintln!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
-        let page_count = (ph.file_size() + 4095) / 4096;
-        for i in 0..page_count {
-            let data = crate::memory::mpage();
-            pages.push(data);
-            if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
-                panic!("Invalid target for ELF loader!");
+        let ncr3 = main::forkp();
+        let mut pages: Vec<*mut u8> = vec![];
+        let exe = xmas_elf::ElfFile::new(&slice).unwrap();
+        let mut program_break: u64 = 0xFFFF800000000000;
+        for ph in exe.program_iter() {
+            let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
+            flags |= PageTableFlags::USER_ACCESSIBLE;
+            flags ^= PageTableFlags::NO_EXECUTE;
+            flags |= PageTableFlags::WRITABLE;
+            let page_count = (ph.file_size() + 4095) / 4096;
+            for i in 0..page_count {
+                let data = crate::memory::mpage();
+                pages.push(data);
+                if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
+                    panic!("Invalid target for ELF loader!");
+                }
+                map_to(
+                    VirtAddr::from_ptr(data),
+                    VirtAddr::new(ph.virtual_addr() + (i * 4096)),
+                    flags,
+                );
             }
-            map_to(
-                VirtAddr::from_ptr(data),
-                VirtAddr::new(ph.virtual_addr() + (i * 4096)),
-                flags,
-            );
-        }
-        let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
-        program_break = if maybe_new_program_break < program_break {
-            program_break
-        } else {
-            maybe_new_program_break
-        };
-        unsafe {
+            let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
+            program_break = if maybe_new_program_break < program_break {
+                program_break
+            } else {
+                maybe_new_program_break
+            };
             accelmemcpy(
                 ph.virtual_addr() as *mut u8,
                 slice.as_ptr().offset(ph.offset() as isize),
                 ph.file_size() as usize,
             );
         }
-    }
-    let ncr3 = x86_64::registers::control::Cr3::read();
-    unsafe {
-        x86_64::registers::control::Cr3::write(ocr3.0, ocr3.1);
-    }
-    let x: Option<&'static [u8]> = Some(ve.leak());
-    preempt::task_alloc(|| unsafe {
         x86_64::registers::control::Cr3::write(ncr3.0, ncr3.1);
-        preempt::CURRENT_TASK.get().box1 = x;
+        preempt::CURRENT_TASK.get().box1 = ve;
         preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
         preempt::CURRENT_TASK.get().program_break = program_break;
-        println!("EXECing to {}", preempt::CURRENT_TASK.get().pid);
+        x86_64::instructions::interrupts::enable();
         jump_user(exe.header.pt2.entry_point());
     });
 }
 
 unsafe fn jump_user(addr: u64) {
-    println!("{:#x?}", addr);
     asm!("
     mov ds,ax
     mov es,ax 

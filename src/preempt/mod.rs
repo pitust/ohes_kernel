@@ -104,8 +104,8 @@ extern "C" fn setup_call(
     }
 }
 
-pub fn task_alloc<T: Fn<()>>(f: T) {
-    fn run_task_ll<T: Fn<()>>(arg: u64) {
+pub fn task_alloc<T: FnOnce<()>>(f: T) {
+    fn run_task_ll<T: FnOnce<()>>(arg: u64) {
         let b = unsafe { Box::from_raw(arg as *mut T) };
         b();
     }

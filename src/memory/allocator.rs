@@ -15,10 +15,14 @@ pub static WRAPPED_ALLOC: WrapperAlloc = WrapperAlloc {};
 impl WrapperAlloc {
     pub unsafe fn do_alloc(&self, layout: Layout) -> *mut u8 {
         // dprintln!("{:?} {:?}", layout, layout.align_to(16).unwrap());
-        return ralloc::Allocator.alloc(layout.align_to(8).unwrap());
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            ralloc::Allocator.alloc(layout.align_to(8).unwrap())
+        })
     }
     pub unsafe fn do_dealloc(&self, ptr: *mut u8, layout: Layout) {
-        return ralloc::Allocator.dealloc(ptr, layout.align_to(8).unwrap());
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            ralloc::Allocator.dealloc(ptr, layout.align_to(8).unwrap())
+        })
     }
 }
 unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
