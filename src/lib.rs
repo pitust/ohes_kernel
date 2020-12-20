@@ -15,6 +15,7 @@
 #![feature(const_ptr_offset)]
 #![feature(iter_advance_by)]
 #![feature(const_raw_ptr_to_usize_cast)]
+#![feature(link_llvm_intrinsics)]
 
 extern crate alloc;
 extern crate faster_rlibc;
@@ -29,6 +30,7 @@ pub mod exiting;
 pub mod init;
 pub mod interrupts;
 pub mod io;
+pub mod stack_canaries;
 pub mod ksvc;
 pub mod ksymmap;
 pub mod main;

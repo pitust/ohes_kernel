@@ -35,7 +35,7 @@ fn user_gets(mut ptr: *mut u8, n: u64) -> String {
     s
 }
 
-ezy_static! { SVC_MAP, BTreeMap<String, u64>, BTreeMap::new() }
+ezy_static! { SVC_MAP, spin::Mutex<BTreeMap<String, u64>>, spin::Mutex::new(BTreeMap::new()) }
 fn freebox1() {
     match preempt::CURRENT_TASK.box1 {
         Some(s) => {
@@ -130,7 +130,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
                     return;
                 }
-                let p = *SVC_MAP.get().get(&target).unwrap();
+                let p = *SVC_MAP.lock().get(&target).unwrap();
                 for r in preempt::TASK_QUEUE.get().iter_mut() {
                     if p == r.pid {
                         while !r.is_listening {
@@ -157,7 +157,8 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             /* sys_listen */
             let name = user_gets(arg1 as *mut u8, arg2);
             preempt::CURRENT_TASK.get().is_listening = false;
-            SVC_MAP.get().insert(name, preempt::CURRENT_TASK.pid);
+            SVC_MAP.lock().insert(name, preempt::CURRENT_TASK.pid);
+            // preempt::CURRENT_TASK.pid
             0
         }
         7 => {
@@ -165,7 +166,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             let nejm = user_gets(arg1 as *mut u8, arg2);
             assert_eq!(
                 *SVC_MAP
-                    .get()
+                    .lock()
                     .get(&nejm)
                     .unwrap(),
                 preempt::CURRENT_TASK.pid
@@ -221,6 +222,7 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     VirtAddr::new(pageaddr),
                     PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
                 );
+                preempt::yield_task();
             }
             dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
             return newbrk;
@@ -246,14 +248,15 @@ pub fn set_rsp_ptr(va: VirtAddr) {
         RSP_PTR = va.as_u64();
     }
 }
-pub fn alloc_rsp_ptr() -> VirtAddr {
+pub fn alloc_rsp_ptr(stack_name: String) -> VirtAddr {
     const STACK_SIZE: usize = 4096 * 5;
     let stack_start = VirtAddr::from_ptr(crate::memory::malloc(STACK_SIZE));
     let stack_end = stack_start + STACK_SIZE;
+    stack_canaries::add_canary(stack_start, stack_name, STACK_SIZE as u64);
     stack_end
 }
-pub fn init_rsp_ptr() {
-    set_rsp_ptr(alloc_rsp_ptr());
+pub fn init_rsp_ptr(stack_name: String) {
+    set_rsp_ptr(alloc_rsp_ptr(stack_name));
 }
 #[naked]
 pub unsafe fn new_syscall_trampoline() {
@@ -327,7 +330,7 @@ pub fn readfs(path: &str) -> &[u8] {
 }
 
 pub fn loaduser() {
-    init_rsp_ptr();
+    init_rsp_ptr("syscall-stack:/bin/init".to_string());
     let loaded_init = readfs("/bin/init");
     let mut pages: Vec<*mut u8> = vec![];
     let exe = xmas_elf::ElfFile::new(&loaded_init).unwrap();
@@ -387,9 +390,10 @@ pub fn do_exec(kernel: &[u8]) {
     let ve = preempt::CURRENT_TASK.get().box2.take();
     freebox1();
     freebox2();
+    let path = String::from_utf8(slice).unwrap();
+    let path2 = path.clone();
     preempt::task_alloc(move || unsafe {
         x86_64::instructions::interrupts::disable();
-        let path = String::from_utf8(slice).unwrap();
         let slice = readfs(&path);
 
         let ncr3 = main::forkp();
@@ -432,7 +436,7 @@ pub fn do_exec(kernel: &[u8]) {
         preempt::CURRENT_TASK.get().program_break = program_break;
         x86_64::instructions::interrupts::enable();
         jump_user(exe.header.pt2.entry_point());
-    });
+    }, format!("syscall-stack:{}", path2.clone()));
 }
 
 unsafe fn jump_user(addr: u64) {

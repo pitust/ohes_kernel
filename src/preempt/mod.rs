@@ -54,8 +54,8 @@ pub struct Task {
     pub is_listening: bool,
     pub is_done: bool,
 }
-ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false }] }
-ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr(), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false } }
+ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false }] }
+ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false } }
 extern "C" fn get_next(buf: &mut Jmpbuf) {
     let tq = TASK_QUEUE.get();
     let mut ct = CURRENT_TASK.clone();
@@ -104,16 +104,16 @@ extern "C" fn setup_call(
     }
 }
 
-pub fn task_alloc<T: FnOnce<()>>(f: T) {
+pub fn task_alloc<T: FnOnce<()>>(f: T, stknm: String) {
     fn run_task_ll<T: FnOnce<()>>(arg: u64) {
         let b = unsafe { Box::from_raw(arg as *mut T) };
         b();
     }
     let b = Box::new(f);
     let ptr = Box::leak(b) as *const T;
-    jump_to_task(run_task_ll::<T>, ptr as u64);
+    jump_to_task(run_task_ll::<T>, ptr as u64, stknm);
 }
-fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64) {
+fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64, stknm: String) {
     const STACK_SIZE_IN_QWORDS: usize = 1024;
     let end_of_stack = STACK_SIZE_IN_QWORDS - 2;
     let mut stack: Box<[u64]> = box [0; STACK_SIZE_IN_QWORDS];
@@ -138,7 +138,7 @@ fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64) {
         TASK_QUEUE.get().push(Task {
             state: b,
             rsp0: crate::interrupts::alloc_rsp0(),
-            rsp_ptr: crate::userland::alloc_rsp_ptr(),
+            rsp_ptr: crate::userland::alloc_rsp_ptr(stknm),
             pid: 1,
             box1: None,
             box2: None,

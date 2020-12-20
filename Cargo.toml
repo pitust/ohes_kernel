@@ -1,57 +1,108 @@
 [package]
 authors = ["pitust <stelmaszek.piotrpilot@gmail.com>"]
+autobins = false
 edition = "2018"
 name = "an_os"
 version = "0.1.0"
-autobins = false
+
+[dependencies]
+acpi = "2.1.0"
+bitflags = "1.2.1"
+fontdue = "0.4.0"
+linked_list_allocator = "0.8.0"
+multiboot2 = "0.9.0"
+pc-keyboard = "0.5.0"
+pic8259_simple = "0.2.0"
+serde_derive = "1.0.117"
+spin = "0.5.2"
+x86 = "0.34.0"
+x86_64 = "0.12.0"
+xmas-elf = "0.7.0"
+
+[dependencies.conquer-once]
+default-features = false
+version = "0.2.0"
+
+[dependencies.cpp_demangle]
+default-features = false
+features = ["alloc"]
+version = "0.3.1"
+
+[dependencies.crossbeam-queue]
+default-features = false
+features = ["alloc"]
+version = "0.2.1"
+
+[dependencies.fallible-iterator]
+default-features = false
+features = ["alloc"]
+version = "0.2.0"
+
+[dependencies.faster_rlibc]
+path = "faster_rlibc"
+
+[dependencies.font8x8]
+default-features = false
+features = ["unicode"]
+version = "0.2"
+
+[dependencies.gimli]
+default-features = false
+features = ["read"]
+version = "0.23.0"
+
+[dependencies.hex]
+default-features = false
+version = "0.4"
+
+[dependencies.kmacros]
+path = "kmacros"
+
+[dependencies.lazy_static]
+features = ["spin_no_std"]
+version = "1.0"
+
+[dependencies.libc]
+default-features = false
+version = "0.2.45"
+
+[dependencies.log]
+default-features = false
+version = "0.4.11"
+
+[dependencies.postcard]
+features = ["alloc"]
+version = "0.5.1"
+
+[dependencies.ralloc]
+default-features = false
+features = ["unsafe_no_mutex_lock"]
+git = "https://github.com/pitust/ralloc"
+
+[dependencies.safety-here]
+path = "safety-here"
+
+[dependencies.serde]
+default-features = false
+features = ["alloc"]
+version = "1.0.117"
+
+[dependencies.serde_json]
+default-features = false
+features = ["alloc"]
+version = "1.0.59"
 
 [features]
 conio = []
+debug_logs = []
 default = []
 displayio = []
 fini_exit = []
 fini_wait = []
-debug_logs = []
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-safety-here = {path = "safety-here"}
-faster_rlibc = {path = "faster_rlibc"}
-kmacros = {path = "kmacros"}
-conquer-once = {version = "0.2.0", default-features = false}
-crossbeam-queue = {version = "0.2.1", features = ["alloc"], default-features = false}
-font8x8 = {version = "0.2", default-features = false, features = ["unicode"]}
-lazy_static = {version = "1.0", features = ["spin_no_std"]}
-linked_list_allocator = "0.8.0"
-pc-keyboard = "0.5.0"
-pic8259_simple = "0.2.0"
-x86_64 = "0.12.0"
-xmas-elf = "0.7.0"
-gimli = { version = "0.23.0", default-features = false, features = ["read"] }
-fallible-iterator = { version = "0.2.0", default-features = false, features = ["alloc"] }
-libc = { version = "0.2.45", default-features = false }
-cpp_demangle = { version = "0.3.1", default-features = false, features = ["alloc"] }
-serde = { version = "1.0.117", default-features = false, features = ["alloc"] }
-serde_json = { version = "1.0.59", default-features = false, features = ["alloc"] }
-serde_derive = "1.0.117"
-postcard = { version = "0.5.1", features = ["alloc"] }
-multiboot2 = "0.9.0"
-fontdue = "0.4.0"
-x86 = "0.34.0"
-hex = { version = "0.4", default-features = false }
-bitflags = "1.2.1"
-ralloc = { git = 'https://github.com/pitust/ralloc', features = ["unsafe_no_mutex_lock"], default-features = false }
-log = { version = "0.4.11", default-features = false }
-acpi = "2.1.0"
-
-
-[patch.'https://github.com/pitust/ralloc']
-ralloc_shim = { path = "shm" }
-
-
-# [package.metadata.bootimage]
-# run-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-s", "-hdb", "initrd.cpio", "-enable-kvm", "-m", "1G", "-debugcon", "file:logz.txt", "-global", "isa-debugcon.iobase=0x402"]
-# test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-s", "-nographic", "-monitor", "none", "-enable-kvm", "-m", "1G", "-debugcon", "file:logz.txt", "-global", "isa-debugcon.iobase=0x402"]
 [lib]
 crate-type = ["staticlib"]
 path = "src/lib.rs"
+
+[patch."https://github.com/pitust/ralloc".ralloc_shim]
+path = "shm"

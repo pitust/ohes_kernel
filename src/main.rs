@@ -61,6 +61,9 @@ fn panic(info: &PanicInfo) -> ! {
     println!("--------------- Kernel Panic (not syncing) ---------------");
     println!("pid: {}", preempt::CURRENT_TASK.pid);
     println!("info: {}", info);
+    println!("] stack checking...");
+    stack_canaries::stk_chk();
+    println!("] stacks checked");
     // unwind::backtrace();
     exiting::exit_fail();
 }
