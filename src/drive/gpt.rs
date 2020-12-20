@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use drive::RODev;
+use drive::{RODev, ReadOp};
 
 pub struct GPTPart {
     name: String,
@@ -22,13 +22,30 @@ impl GPTPart {
     pub fn sz(&self) -> u32 {
         return self.sz;
     }
+    fn map_va(&self, a: u64) -> Result<u64, String> {
+        if (self.sz * 512) as u64 <= a {
+            return Err(format!("GPT fault: OOB read ({} > {})", a, self.sz * 512));
+        }
+        Ok(a + (self.slba * 512) as u64)
+    }
 }
 impl RODev for GPTPart {
     fn read_from(&mut self, lba: u32) -> Result<Vec<u8>, String> {
         if self.sz <= lba {
-            return Err("GPT fault: OOB read".to_string());
+            return Err(format!("GPT fault: OOB read ({} > {})", lba, self.sz));
         }
         return self.drive.read_from(lba + self.slba);
+    }
+    fn read_unaligned(&mut self, addr: u64, len: u64) -> Result<Vec<u8>, String> {
+        self.drive.read_unaligned(self.map_va(addr)?, len)
+    }
+    fn vector_read_ranges(&mut self, ops: &mut [(u64, u64)]) -> Vec<u8> {
+        let mut ops: Vec<(u64, u64)> = ops.into_iter().map(|p| (self.map_va(p.0).unwrap(), p.1)).collect();
+        let q = self.drive.vector_read_ranges(&mut ops);
+        if q.len() == 0 {
+            panic!("RF");
+        }
+        q
     }
 }
 pub trait GetGPTPartitions {
@@ -89,11 +106,14 @@ impl GetGPTPartitions for dyn RODev {
 }
 
 pub fn test0() {
-    let mut d = unsafe { drive::Drive::new(true, 0x1F0, 0x3F6) };
+    let mut d = drive::SickCustomDev {};
     let d2: &mut dyn RODev = &mut d;
-    let p = d2.get_gpt_partitions(box (|| box (unsafe { drive::Drive::new(true, 0x1F0, 0x3F6) })));
+    let p = d2.get_gpt_partitions(box (|| box (drive::SickCustomDev {})));
     for pa in p {
-        // println!("{}", pa.name());
+        println!("{}", pa.name());
+        println!("{}", pa.guid());
+        println!("{}", pa.slba());
+
         drive::ext2::handle_rodev_with_ext2(box pa);
     }
 }

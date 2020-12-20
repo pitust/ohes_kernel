@@ -10,7 +10,7 @@ pub enum KSvcResult {
     Failure(String),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FSOp {
     Read,
     ReadDir,
@@ -53,15 +53,17 @@ pub fn ksvc_init() {
     });
     t.insert("kfs".to_string(), box || {
         let d: (FSOp, String) = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();
-        let mut drv: Box<dyn RODev> = box unsafe { drive::Drive::new(true, 0x1f0, 0x3f6) };
-        let gpt =
-            drv.get_gpt_partitions(box || unsafe { box drive::Drive::new(true, 0x1f0, 0x3f6) });
+        let mut drv: Box<dyn RODev> = box drive::SickCustomDev {};
+        let gpt = drv.get_gpt_partitions(box || box drive::SickCustomDev {});
         let tbl: Vec<Box<(dyn RODev + 'static)>> =
             gpt.into_iter().map(|x| (box x) as Box<dyn RODev>).collect();
         let mut gpt0 = tbl.into_iter().next().unwrap();
 
-
-        let path_elems: Vec<String> = d.1.split('/').map(|p| p.to_string()).filter(|a| a != "").collect();
+        let path_elems: Vec<String> =
+            d.1.split('/')
+                .map(|p| p.to_string())
+                .filter(|a| a != "")
+                .collect();
         let bytes_of_superblock: Vec<u8> =
             vec![gpt0.read_from(2).unwrap(), gpt0.read_from(3).unwrap()]
                 .into_iter()
@@ -69,11 +71,9 @@ pub fn ksvc_init() {
                 .collect();
         let sb = drive::ext2::handle_super_block(bytes_of_superblock.as_slice());
         let inode_id = drive::ext2::traverse_fs_tree(&mut gpt0, &sb, path_elems);
-        
+
         let r = match d.0 {
-            FSOp::Read => FSResult::Data(
-                drive::ext2::cat(&mut gpt0, inode_id, &sb),
-            ),
+            FSOp::Read => FSResult::Data(drive::ext2::cat(&mut gpt0, inode_id, &sb)),
             FSOp::ReadDir => FSResult::Dirents(
                 drive::ext2::readdir(&mut gpt0, inode_id, &sb)
                     .into_iter()
@@ -85,4 +85,43 @@ pub fn ksvc_init() {
         let x = postcard::to_allocvec(&r).unwrap();
         preempt::CURRENT_TASK.get().box1 = Some(x.leak());
     });
+}
+pub fn dofs() {
+    let d: (FSOp, String) = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();
+    if d.0 == FSOp::Read {
+        let r = FSResult::Data(userland::readfs(&d.1).to_vec());
+        let x = postcard::to_allocvec(&r).unwrap();
+        preempt::CURRENT_TASK.get().box1 = Some(x.leak());
+        return
+    }
+    let mut drv: Box<dyn RODev> = box drive::SickCustomDev {};
+    let gpt = drv.get_gpt_partitions(box || box drive::SickCustomDev {});
+    let tbl: Vec<Box<(dyn RODev + 'static)>> =
+        gpt.into_iter().map(|x| (box x) as Box<dyn RODev>).collect();
+    let mut gpt0 = tbl.into_iter().next().unwrap();
+
+    let path_elems: Vec<String> =
+        d.1.split('/')
+            .map(|p| p.to_string())
+            .filter(|a| a != "")
+            .collect();
+    let bytes_of_superblock: Vec<u8> = vec![gpt0.read_from(2).unwrap(), gpt0.read_from(3).unwrap()]
+        .into_iter()
+        .flat_map(|f| f)
+        .collect();
+    let sb = drive::ext2::handle_super_block(bytes_of_superblock.as_slice());
+    let inode_id = drive::ext2::traverse_fs_tree(&mut gpt0, &sb, path_elems);
+
+    let r = match d.0 {
+        FSOp::Read => FSResult::Data(userland::readfs(&d.1).to_vec()),
+        FSOp::ReadDir => FSResult::Dirents(
+            drive::ext2::readdir(&mut gpt0, inode_id, &sb)
+                .into_iter()
+                .map(|k| k.0)
+                .collect(),
+        ),
+        FSOp::Stat => FSResult::Stats(drive::ext2::stat(&mut gpt0, inode_id, &sb).bits()),
+    };
+    let x = postcard::to_allocvec(&r).unwrap();
+    preempt::CURRENT_TASK.get().box1 = Some(x.leak());
 }

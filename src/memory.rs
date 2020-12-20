@@ -1,5 +1,6 @@
-use crate::{println, dprintln};
+use crate::{dprintln, println};
 use alloc::{alloc::Layout, vec::Vec};
+use allocator::CUR_ADDR_PUB;
 // use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 use crate::shittymutex::Mutex;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -13,8 +14,6 @@ use x86_64::structures::paging::{
 use x86_64::{registers::control::Cr3, structures::paging::page_table::PageTableEntry};
 use x86_64::{PhysAddr, VirtAddr};
 // pub static PHBASE: AtomicUsize = AtomicUsize::new(0);
-
-
 
 pub mod allocator;
 pub fn munmap(area: VirtAddr) {
@@ -67,7 +66,21 @@ pub fn get_l4() -> &'static mut PageTable {
 
     unsafe { &mut *ptr }
 }
-
+pub fn convig(x: u64) -> u64 {
+    crate::memory::translate(VirtAddr::new(x as u64))
+        .unwrap()
+        .as_u64()
+}
+pub fn convpc<T>(x: *const T) -> u64 {
+    crate::memory::translate(VirtAddr::new(x as u64))
+        .unwrap()
+        .as_u64()
+}
+pub fn convpm<T>(x: *mut T) -> u64 {
+    crate::memory::translate(VirtAddr::new(x as u64))
+        .unwrap()
+        .as_u64()
+}
 pub fn translate(addr: VirtAddr) -> Option<PhysAddr> {
     get_mapper().translate_addr(addr)
 }
@@ -127,8 +140,10 @@ pub struct BootInfoFrameAllocator {
     memory_map: &'static MemoryMapTag,
 }
 
-extern {
-    static ee: u8;
+extern "C" {
+    pub static es: u8;
+    pub static esz: u8;
+    pub static ee: u8;
 }
 
 impl BootInfoFrameAllocator {
@@ -140,7 +155,9 @@ impl BootInfoFrameAllocator {
         let usable_regions = regions.filter(|r| r.typ() == MemoryAreaType::Available);
         let addr_ranges = usable_regions.map(|r| r.start_address()..r.end_address());
         let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-        frame_addresses.filter(|p| unsafe { core::mem::transmute::<&u8, u64>(&ee) < *p }).map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
+        frame_addresses
+            .filter(|p| unsafe { core::mem::transmute::<&u8, u64>(&ee) < *p })
+            .map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
     }
     pub fn show(&self) {
         let x: Vec<PhysFrame<Size4KiB>> = self.usable_frames().collect();
@@ -176,7 +193,7 @@ pub extern "C" fn malloc(size: usize) -> *mut u8 {
 #[no_mangle]
 pub extern "C" fn free(el: *mut u8) {
     unsafe {
-        crate::memory::allocator::WRAPPED_ALLOC.dealloc(
+        crate::memory::allocator::WRAPPED_ALLOC.do_dealloc(
             el.offset(-8),
             Layout::from_size_align(*(el.offset(-8) as *const usize), 8).unwrap(),
         )
@@ -197,11 +214,11 @@ pub fn mpage() -> *mut u8 {
 pub fn fpage(el: *mut u8) {
     unsafe {
         crate::memory::allocator::WRAPPED_ALLOC
-            .dealloc(el, Layout::from_size_align(4096, 4096).unwrap())
+            .do_dealloc(el, Layout::from_size_align(4096, 4096).unwrap())
     };
 }
 #[no_mangle]
-pub fn brk(to: *const u8) -> *mut u8 {
+pub extern "C" fn brk(to: *const u8) -> *mut u8 {
     // yeee
     if to == 0 as *const u8 {
         return allocator::CUR_ADDR_PUB.load(Ordering::Relaxed) as *mut u8;

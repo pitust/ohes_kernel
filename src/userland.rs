@@ -1,4 +1,9 @@
-use crate::{memory::map_to, prelude::*};
+use crate::{
+    drive::{gpt::GetGPTPartitions, RODev},
+    memory::map_to,
+    prelude::*,
+};
+use kmacros::handle_read;
 use x86_64::{
     structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB},
     VirtAddr,
@@ -113,6 +118,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         5 => {
             /* sys_send */
             let target = user_gets(arg1 as *mut u8, arg2);
+            if target == "kfs" {
+                ksvc::dofs();
+                return 0;
+            }
             x86_64::instructions::interrupts::without_interrupts(|| {
                 if ksvc::KSVC_TABLE.contains_key(&target) {
                     ksvc::KSVC_TABLE.get().get(&target).unwrap()();
@@ -171,10 +180,8 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             /* sys_exec */
             x86_64::instructions::interrupts::without_interrupts(|| {
                 let l = preempt::CURRENT_TASK.box1;
-                let r = preempt::CURRENT_TASK.box1;
+                let r = preempt::CURRENT_TASK.box2;
                 do_exec(l.unwrap(), r.unwrap());
-                freebox1();
-                freebox2();
                 return;
             });
             0
@@ -285,6 +292,7 @@ pub unsafe fn new_syscall_trampoline() {
 }
 unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
     x86_64::instructions::interrupts::without_interrupts(|| {
+        println!("{:p} {:p} {:#x?}", from, to, size);
         if size < 8 {
             faster_rlibc::memcpy(to, from, size);
             return;
@@ -308,11 +316,16 @@ pub fn mkpid(ppid: u64) -> u64 {
 pub fn getpid() -> u64 {
     preempt::CURRENT_TASK.pid
 }
+#[handle_read]
+pub fn readfs(path: &str) -> &[u8] {
+    panic!("asds");
+}
+
 pub fn loaduser() {
     init_rsp_ptr();
-    let slice = include_bytes!("../build/test.elf");
+    let loaded_init = readfs("/bin/init");
     let mut pages: Vec<*mut u8> = vec![];
-    let exe = xmas_elf::ElfFile::new(slice).unwrap();
+    let exe = xmas_elf::ElfFile::new(&loaded_init).unwrap();
     let mut program_break: u64 = 0xFFFF800000000000;
     for ph in exe.program_iter() {
         if ph.get_type().unwrap() == Type::Load {
@@ -349,7 +362,7 @@ pub fn loaduser() {
             unsafe {
                 accelmemcpy(
                     ph.virtual_addr() as *mut u8,
-                    slice.as_ptr().offset(ph.offset() as isize),
+                    loaded_init.as_ptr().offset(ph.offset() as isize),
                     ph.file_size() as usize,
                 );
             }
@@ -366,22 +379,22 @@ pub fn loaduser() {
 }
 
 pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
-    // let's test multitasking
-    let slice = kernel;
+    let slice = kernel.to_vec();
+    let ve: Vec<u8> = argvblob.iter().map(|f| *f).collect();
+
+    freebox1();
+    freebox2();
+
+    let ocr3 = x86_64::registers::control::Cr3::read();
+    main::forkp();
     let mut pages: Vec<*mut u8> = vec![];
-    let exe = xmas_elf::ElfFile::new(slice).unwrap();
+    let exe = xmas_elf::ElfFile::new(&slice).unwrap();
     let mut program_break: u64 = 0xFFFF800000000000;
     for ph in exe.program_iter() {
         let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
-        if ph.flags().is_read() {
-            flags |= PageTableFlags::USER_ACCESSIBLE;
-        }
-        if ph.flags().is_execute() {
-            flags ^= PageTableFlags::NO_EXECUTE;
-        }
-        if ph.flags().is_write() {
-            flags |= PageTableFlags::WRITABLE;
-        }
+        flags |= PageTableFlags::USER_ACCESSIBLE;
+        flags ^= PageTableFlags::NO_EXECUTE;
+        flags |= PageTableFlags::WRITABLE;
         dprintln!("Flags: {:?} addr: {:#x?}", flags, ph.virtual_addr());
         let page_count = (ph.file_size() + 4095) / 4096;
         for i in 0..page_count {
@@ -410,18 +423,23 @@ pub fn do_exec(kernel: &[u8], argvblob: &[u8]) {
             );
         }
     }
-    // now initialize all the necessary fields.
-
-    // To free just fpage() all of the `pages`
-    preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
-    preempt::CURRENT_TASK.get().program_break = program_break;
+    let ncr3 = x86_64::registers::control::Cr3::read();
+    unsafe {
+        x86_64::registers::control::Cr3::write(ocr3.0, ocr3.1);
+    }
+    let x: Option<&'static [u8]> = Some(ve.leak());
     preempt::task_alloc(|| unsafe {
-        let ve: Vec<u8> = argvblob.iter().map(|f| *f).collect();
-        preempt::CURRENT_TASK.get().box1 = Some(ve.leak());
+        x86_64::registers::control::Cr3::write(ncr3.0, ncr3.1);
+        preempt::CURRENT_TASK.get().box1 = x;
+        preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
+        preempt::CURRENT_TASK.get().program_break = program_break;
+        println!("EXECing to {}", preempt::CURRENT_TASK.get().pid);
         jump_user(exe.header.pt2.entry_point());
     });
 }
+
 unsafe fn jump_user(addr: u64) {
+    println!("{:#x?}", addr);
     asm!("
     mov ds,ax
     mov es,ax 

@@ -27,7 +27,10 @@ pub static CB: AtomicUsize = AtomicUsize::new(255);
 pub mod device;
 
 pub enum MaybeInitDevice {
-    GotMman(alloc::vec::Vec<Box<dyn device::IODevice>>, alloc::vec::Vec<Box<dyn device::IODevice>>),
+    GotMman(
+        alloc::vec::Vec<Box<dyn device::IODevice>>,
+        alloc::vec::Vec<Box<dyn device::IODevice>>,
+    ),
     NoMman,
 }
 
@@ -56,42 +59,60 @@ pub fn proper_init_for_iodevs(mbstruct: &'static multiboot2::BootInformation) {
             devs.push(box device::debugcon::DebugCon {
                 port: debugcon_addr,
             });
-            if nid { ddevs.push(box device::debugcon::DebugCon {
-                port: debugcon_addr,
-            }); }
+            if nid {
+                ddevs.push(box device::debugcon::DebugCon {
+                    port: debugcon_addr,
+                });
+            }
         }
         if op.starts_with("serial=") {
             let debugcon_addr = op.split_at(7).1.parse().unwrap();
             devs.push(box device::serial::Serial::new(debugcon_addr));
-            if nid { ddevs.push(box device::serial::Serial::new(debugcon_addr)); }
+            if nid {
+                ddevs.push(box device::serial::Serial::new(debugcon_addr));
+            }
+        }
+        if op.starts_with("input-txt=") {
+            let dat = op.split_at(10).1;
+            devs.push(box device::virt::Repe { s: dat.to_string() + "\n" });
         }
         if op == "default_serial" {
             devs.push(box device::serial::Serial::new(0x3F8));
-            if nid { ddevs.push(box device::debugcon::DebugCon { port: 0x402 }); }
+            if nid {
+                ddevs.push(box device::debugcon::DebugCon { port: 0x402 });
+            }
         }
         if op == "default_debugcon" {
             devs.push(box device::debugcon::DebugCon { port: 0x402 });
-            if nid { ddevs.push(box device::serial::Serial::new(0x3F8)); }
+            if nid {
+                ddevs.push(box device::debugcon::DebugCon { port: 0x402 });
+            }
         }
         if op == "textvga" {
             devs.push(box device::multiboot_text::MultibootText::new(
                 mbstruct.framebuffer_tag().unwrap(),
             ));
-            if nid { ddevs.push(box device::multiboot_text::MultibootText::new(
-                mbstruct.framebuffer_tag().unwrap(),
-            )); }
+            if nid {
+                ddevs.push(box device::multiboot_text::MultibootText::new(
+                    mbstruct.framebuffer_tag().unwrap(),
+                ));
+            }
         }
         if op == "graphicz" {
             devs.push(box device::multiboot_vga::MultibootVGA::new(
                 mbstruct.framebuffer_tag().unwrap(),
             ));
-            if nid { ddevs.push(box device::multiboot_vga::MultibootVGA::new(
-                mbstruct.framebuffer_tag().unwrap(),
-            )); }
+            if nid {
+                ddevs.push(box device::multiboot_vga::MultibootVGA::new(
+                    mbstruct.framebuffer_tag().unwrap(),
+                ));
+            }
         }
         if op == "kbdint" {
             devs.push(box device::kbdint_input::KbdInt {});
-            if nid { ddevs.push(box device::kbdint_input::KbdInt {}); }
+            if nid {
+                ddevs.push(box device::kbdint_input::KbdInt {});
+            }
         }
         if op == "debug:" {
             nid = true;
@@ -103,6 +124,12 @@ pub fn proper_init_for_iodevs(mbstruct: &'static multiboot2::BootInformation) {
     Printer
         .write_fmt(format_args!("Done kernel commandline: {}\n", kcmdline))
         .unwrap();
+    unsafe {
+        log::set_logger_racy(&KLogImpl).unwrap();
+    }
+    crate::println!("{}", log::max_level());
+    log::set_max_level(LevelFilter::Trace);
+    log::info!("Test");
 }
 
 impl Printer {
@@ -216,7 +243,6 @@ macro_rules! dbg {
         ($($crate::dbg!($val)),+,)
     };
 }
-
 
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Copy, Clone)]
 enum EHS {
@@ -430,4 +456,32 @@ pub fn print_out(args: Arguments) {
 #[doc(hidden)]
 pub fn dprint_out(args: Arguments) {
     DbgPrinter.write_fmt(args).expect("Write failed");
+}
+
+use log::{Level, LevelFilter, Metadata, Record};
+
+struct KLogImpl;
+
+impl log::Log for KLogImpl {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        let o = match record.level() {
+            Level::Error => "\x1b[32mERROR",
+            Level::Warn => "\x1b[33mWARN",
+            Level::Info => "\x1b[38mINFO",
+            Level::Debug => "\x1b[30mDEBUG",
+            Level::Trace => "\x1b[30;2mTRACE",
+        };
+        println!("{} {}\x1b[0m", o, record.args());
+    }
+
+    fn flush(&self) {}
+}
+
+#[no_mangle]
+pub fn out(s: &str) {
+    // print!("{}", s);
 }

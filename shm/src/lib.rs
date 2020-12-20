@@ -10,6 +10,7 @@ pub mod config {
     pub const LOCAL_MEMTRIM_STOP: usize = 1024;
     pub const LOCAL_MEMTRIM_LIMIT: usize = 1024;
     pub const FRAGMENTATION_SCALE: usize = 10;
+    pub const MIN_LOG_LEVEL: u8 = 0;
 
     pub fn extra_brk(size: usize) -> usize {
         // TODO: Tweak this.
@@ -38,10 +39,19 @@ pub mod config {
 
         core::cmp::max(MIN_EXTRA, core::cmp::min(MULTIPLIER * size, MAX_EXTRA))
     }
+    pub fn log(s: &str) -> i32 {
+        unsafe {
+            crate::syscalls::out(s);
+        }
+        0
+    }
 }
 pub mod syscalls {
 
     extern "C" {
         pub fn brk(to: *const u8) -> *mut u8;
+    }
+    extern "Rust" {
+        pub fn out(s: &str);
     }
 }

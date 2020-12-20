@@ -11,12 +11,16 @@
         "trigger_after": "_init",
         "run": [
             "kinfo",
-            "-info",
             "Booted Oh Es!"
         ],
         "wants": [
-            "net",
-            "sircs"
+            "info-fun"
+        ]
+    },
+    "info-fun": {
+        "run": [
+            "kinfo",
+            "\u001b[44m\u001b[30m ~ \u001b[0m\u001b[34m\ue0b0\u001b[0m I want powerline fonts here!"
         ]
     }
 }

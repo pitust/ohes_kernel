@@ -1,9 +1,10 @@
 pub use crate::shittymutex::Mutex;
 pub use crate::*;
 pub use crate::{
-    _ezy_static, counter, dbg, dprintln, dprint, ezy_static, input, io::Printer, print, println,
+    _ezy_static, counter, dbg, dprint, dprintln, ezy_static, input, io::Printer, print, println,
     testing,
 };
+pub use alloc::format;
 pub use alloc::{boxed::Box, collections::*, collections::*, string::*, vec, vec::Vec};
 pub use core::sync::atomic::*;
 pub use lazy_static::lazy_static;

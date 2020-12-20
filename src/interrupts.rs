@@ -170,7 +170,6 @@ extern "x86-interrupt" fn gpe(stack_frame: &mut InterruptStackFrame, error_code:
     panic!("#GP at: \n{:#?}\nError code: {}", stack_frame, error_code);
 }
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: &mut InterruptStackFrame) -> () {
-    loop {}
     panic!("Invalid opcode at: \n{:#?}", stack_frame);
 }
 
@@ -230,8 +229,7 @@ extern "x86-interrupt" fn page_fault_handler(
             stack_frame.instruction_pointer
         );
     }
-    // panic!("Page fault");
-    loop {}
+    panic!("Page fault");
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {

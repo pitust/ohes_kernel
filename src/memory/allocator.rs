@@ -1,8 +1,8 @@
-use crate::{print, println};
+use crate::{dprintln, print, println};
 // use core::alloc::GlobalAlloc;
 use core::ptr::null_mut;
 use core::{
-    alloc::{AllocRef, GlobalAlloc, Layout},
+    alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
 };
 use linked_list_allocator::{Heap, LockedHeap};
@@ -14,18 +14,19 @@ pub struct WrapperAlloc {}
 pub static WRAPPED_ALLOC: WrapperAlloc = WrapperAlloc {};
 impl WrapperAlloc {
     pub unsafe fn do_alloc(&self, layout: Layout) -> *mut u8 {
-        return ralloc::Allocator.alloc(layout);
+        // dprintln!("{:?} {:?}", layout, layout.align_to(16).unwrap());
+        return ralloc::Allocator.alloc(layout.align_to(8).unwrap());
     }
-    pub unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        return ralloc::Allocator.dealloc(ptr, layout);
+    pub unsafe fn do_dealloc(&self, ptr: *mut u8, layout: Layout) {
+        return ralloc::Allocator.dealloc(ptr, layout.align_to(8).unwrap());
     }
 }
 unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        return ralloc::Allocator.alloc(layout);
+        return self.do_alloc(layout);
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        return ralloc::Allocator.dealloc(ptr, layout);
+        return self.do_dealloc(ptr, layout);
     }
 }
 pub static ALLOCATOR: crate::shittymutex::Mutex<Heap> =

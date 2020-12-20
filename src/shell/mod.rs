@@ -105,7 +105,7 @@ pub async fn shell() {
     ecmd!(user, crate::userland::loaduser());
     ecmd!(gptt, drive::gpt::test0());
     ecmd!(pci, crate::pci::testing());
-    
+
     loop {
         print!("\x1b[44m\x1b[30m ~ \x1b[0m\x1b[34m\u{e0b0}\x1b[0m ");
         let im = Mutex::new(Z { x: ch.len() });

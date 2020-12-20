@@ -5,6 +5,7 @@ pub mod kbdint_input;
 pub mod multiboot_text;
 pub mod multiboot_vga;
 pub mod serial;
+pub mod virt;
 
 pub trait IODevice: Send + Sync {
     fn write_str(&mut self, _s: &str) {}

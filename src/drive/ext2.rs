@@ -295,50 +295,48 @@ pub fn get_blk_grp_desc(blkgrp: u64, dev: &mut Box<dyn RODev>) -> BlkGrpDesc {
     cln
 }
 fn read_blk_tbl(dev: &mut Box<dyn RODev>, sb: &SuperBlock, dat: Vec<u8>) -> Vec<u8> {
-    let slc = unsafe { core::slice::from_raw_parts(dat.as_ptr() as *const u64, dat.len() >> 3) };
-    let d: Vec<u8> = slc
+    let slc = unsafe { core::slice::from_raw_parts(dat.as_ptr() as *const u32, dat.len() >> 2) };
+    let mut d: Vec<(u64, u64)> = slc
         .iter()
-        .flat_map(|f| {
-            if *f != 0 {
-                readarea(
-                    f << (10 + sb.log2_blocksize),
-                    1 << (10 + sb.log2_blocksize),
-                    dev,
-                )
-            } else {
-                vec![]
-            }
+        .filter(|a| **a != 0)
+        .map(|f| {
+            (
+                (f << (10 + sb.log2_blocksize)) as u64,
+                1 << (10 + sb.log2_blocksize) as u64,
+            )
         })
         .collect();
-    return d;
+    let t = dev.vector_read_ranges(&mut d);
+    // println!("{:?}", t);
+    t
 }
 fn read_from_inode(ino: Inode, dev: &mut Box<dyn RODev>, sb: &SuperBlock) -> Vec<u8> {
+    if ino.triplblkptr != 0 {
+        let dat = readarea(
+            (ino.triplblkptr as u64) << (10 + sb.log2_blocksize),
+            1 << (10 + sb.log2_blocksize),
+            dev,
+        );
+        let dat = read_blk_tbl(dev, sb, dat);
+        let dat = read_blk_tbl(dev, sb, dat);
+        return read_blk_tbl(dev, sb, dat);
+    }
+    if ino.dblblkptr != 0 {
+        let dat = readarea(
+            (ino.dblblkptr as u64) << (10 + sb.log2_blocksize),
+            1 << (10 + sb.log2_blocksize),
+            dev,
+        );
+        let dat = read_blk_tbl(dev, sb, dat);
+        return read_blk_tbl(dev, sb, dat);
+    }
     if ino.singlblkptr != 0 {
         let dat = readarea(
             (ino.singlblkptr as u64) << (10 + sb.log2_blocksize),
             1 << (10 + sb.log2_blocksize),
             dev,
         );
-
-        return read_blk_tbl(dev, sb, dat);
-    }
-    if ino.dblblkptr != 0 {
-        let dat = readarea(
-            (ino.singlblkptr as u64) << (10 + sb.log2_blocksize),
-            1 << (10 + sb.log2_blocksize),
-            dev,
-        );
-        let dat = read_blk_tbl(dev, sb, dat);
-        return read_blk_tbl(dev, sb, dat);
-    }
-    if ino.triplblkptr != 0 {
-        let dat = readarea(
-            (ino.singlblkptr as u64) << (10 + sb.log2_blocksize),
-            1 << (10 + sb.log2_blocksize),
-            dev,
-        );
-        let dat = read_blk_tbl(dev, sb, dat);
-        let dat = read_blk_tbl(dev, sb, dat);
+        println!("{:?}", dat);
         return read_blk_tbl(dev, sb, dat);
     }
     [
@@ -423,10 +421,13 @@ pub fn cat(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock) -> Vec<u8> {
     let data = readarea(inode_table + (0x80 * (inode as u64 - 1)), 0x80, dev);
     let ino = unsafe { *(data.as_ptr() as *const Inode) }.clone();
     drop(data);
-    
+
     let f = Ext2InodeAttr::from_bits(ino.perms).unwrap();
     assert!(f.contains(Ext2InodeAttr::REGULARFILE) || f.contains(Ext2InodeAttr::SYMLINK));
-    read_from_inode(ino, dev, sb).split_at(ino.size as usize).0.to_vec()
+    let mut z = read_from_inode(ino, dev, sb);
+    
+    z.truncate(ino.size as usize);
+    z
 }
 pub fn stat(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock) -> Ext2InodeAttr {
     let group = inode / sb.inode_per_group;

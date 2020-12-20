@@ -58,7 +58,9 @@ extern "C" fn eh_personality() {}
 fn panic(info: &PanicInfo) -> ! {
     x86_64::instructions::interrupts::disable();
     io::Printer.set_color(255, 0, 0);
-    println!("Panic: {}", info);
+    println!("--------------- Kernel Panic (not syncing) ---------------");
+    println!("pid: {}", preempt::CURRENT_TASK.pid);
+    println!("info: {}", info);
     // unwind::backtrace();
     exiting::exit_fail();
 }

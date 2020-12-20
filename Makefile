@@ -1,5 +1,5 @@
-run: build/oh_es.iso build/hdb.bin
-	qemu-system-x86_64 -hda build/oh_es.iso -s -hdb build/hdb.bin -debugcon file:logz.txt -global isa-debugcon.iobase=0x402 -accel kvm -cpu host -vnc :1 -monitor none -serial stdio
+run: build/oh_es.iso build/data.img
+	qemu-system-x86_64 -hda build/oh_es.iso -s -debugcon file:logz.txt -global isa-debugcon.iobase=0x402 -accel kvm -cpu host -vnc :1 -monitor none -serial stdio
 build/oh_es.iso: build/kernel.elf cfg/grub.cfg
 	rm -rf iso
 	mkdir -p iso/boot/grub
@@ -30,7 +30,7 @@ build/boot.o: asm/boot.s
 	nasm asm/boot.s -f elf64 -o build/boot.o
 build/test.o: user/test.s
 	nasm -felf64 user/test.s -o build/test.o
-build/hdb.bin: build/hdb.note $(wildcard rootfs/*)
+build/data.img: build/data.note $(shell find rootfs)
 	mke2fs \
 		-L 'ohes-sysroot' \
 		-N 0 \
@@ -40,14 +40,14 @@ build/hdb.bin: build/hdb.note $(wildcard rootfs/*)
 		-r 1 \
 		-t ext2 \
 		"build/ext.img" \
-		64K
+		128M
 
-	dd conv=notrunc if=build/ext.img of=build/hdb.bin bs=512 seek=4048
-build/hdb.note:
-	dd if=/dev/zero bs=512 count=76789 of=build/hdb.bin
-	dd if=/dev/zero bs=512 count=128 of=build/ext.img
-	sfdisk build/hdb.bin <cfg/disklayout.sfdsk
-	touch build/hdb.note
+	dd conv=notrunc if=build/ext.img of=build/data.img bs=512 seek=4048 status=progress
+build/data.note:
+	dd if=/dev/zero bs=512K count=280 of=build/data.img status=progress
+	dd if=/dev/zero bs=512K count=256 of=build/ext.img status=progress
+	sfdisk build/data.img <cfg/disklayout.sfdsk
+	touch build/data.note
 faux:
 ffonts:
 	wget https://fonts.gstatic.com/s/robotomono/v12/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_S-W4Ep0.woff2 -Ofonts/roboto.woff2

@@ -1,4 +1,3 @@
-use kmacros::register;
 
 pub fn is_test() -> bool {
     #[cfg(test)]

@@ -122,13 +122,9 @@ pub fn init(boot_info: &'static multiboot2::BootInformation) {
     });
 
     run_task("unwind", || {
-        for s in boot_info.elf_sections_tag().unwrap().sections() {
-            if s.name() == ".eh_frame" {
-                println!("Grabbed eh_frame");
-                unsafe {
-                    unwind::__register_frame(s.start_address() as *mut c_void, s.size() as usize);
-                }
-            }
+
+        unsafe {
+            unwind::__register_frame((&memory::es) as *const u8 as *mut u8 as *mut c_void, (&memory::esz) as *const u8 as u64 as usize);
         }
     });
     run_task("ksvc", || {
