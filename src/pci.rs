@@ -30,7 +30,7 @@ fn pci_read32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
 fn pci_read8(bus: u8, slot: u8, func: u8, offset: u8) -> u8 {
     pci_read16(bus, slot, func, offset) as u8
 }
-fn to_int(c: &str) -> Option<u16> {
+pub fn to_int(c: &str) -> Option<u16> {
     let mut r: u16 = 0;
     for ccx in c.chars() {
         r = r * 16;
@@ -48,7 +48,7 @@ fn to_int(c: &str) -> Option<u16> {
     }
     return Some(r);
 }
-pub fn idlookup(vendor: u16, dev: u16) -> Option<String> {
+pub fn idlookup(_vendor: u16, _dev: u16) -> Option<String> {
     // let vec = PCI_TABLE.split('\n');
     // let mut iscv = false;
     // for x in vec {

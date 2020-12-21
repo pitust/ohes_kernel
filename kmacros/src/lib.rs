@@ -11,7 +11,7 @@ use std::{
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::ItemFn;
-use syn::{parse, parse_macro_input, parse_str, Block, ExprMatch};
+use syn::{parse_macro_input, parse_str, ExprMatch};
 
 fn getfilez(dir: &Path, cb: &mut dyn FnMut(&DirEntry)) -> io::Result<()> {
     assert!(dir.exists());

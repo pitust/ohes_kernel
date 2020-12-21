@@ -1,8 +1,5 @@
 #![no_std]
 
-pub mod thread_destructor {
-    pub fn register(t: *mut u8, dtor: unsafe extern "C" fn(*mut u8)) {}
-}
 pub mod config {
     pub fn default_oom_handler() {}
     pub const OS_MEMTRIM_LIMIT: usize = 0x1000000;

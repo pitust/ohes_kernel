@@ -25,14 +25,14 @@ pub fn ensure_region_safe(ptr: *mut u8, len: usize) {
     }
 }
 fn user_gets(mut ptr: *mut u8, n: u64) -> String {
-    let mut s = "".to_string();
+    let mut s = vec![];
     unsafe {
         for _ in 0..n {
-            s += &((*read_from_user(ptr)) as char).to_string();
+            s.push(*read_from_user(ptr));
             ptr = ptr.offset(1);
         }
     }
-    s
+    String::from_utf8(s).unwrap()
 }
 
 ezy_static! { SVC_MAP, spin::Mutex<BTreeMap<String, u64>>, spin::Mutex::new(BTreeMap::new()) }
@@ -259,7 +259,7 @@ pub fn init_rsp_ptr(stack_name: String) {
     set_rsp_ptr(alloc_rsp_ptr(stack_name));
 }
 #[naked]
-pub unsafe fn new_syscall_trampoline() {
+pub unsafe extern "C" fn new_syscall_trampoline() {
     asm!(
         "
         cli
@@ -296,8 +296,7 @@ pub unsafe fn new_syscall_trampoline() {
     .global RSP_PTR
     RSP_PTR:
         .space 0x8, 0x00
-    "
-    );
+    ", options(noreturn));
 }
 unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
     x86_64::instructions::interrupts::without_interrupts(|| {

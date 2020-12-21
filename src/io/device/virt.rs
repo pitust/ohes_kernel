@@ -3,7 +3,7 @@ pub struct Repe {
     pub s: String
 }
 impl io::device::IODevice for Repe {
-    fn write_str(&mut self, s: &str) {
+    fn write_str(&mut self, _s: &str) {
     }
 
     fn read_chr(&mut self) -> Option<char> {

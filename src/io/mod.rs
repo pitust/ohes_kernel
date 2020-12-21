@@ -160,7 +160,7 @@ impl Printer {
 impl Write for Printer {
     fn write_str(&mut self, s: &str) -> Result {
         match IO_DEVS.get().force_maybeinitdev() {
-            MaybeInitDevice::GotMman(mmaned, dbgdevs) => {
+            MaybeInitDevice::GotMman(mmaned, _dbgdevs) => {
                 for mm in mmaned {
                     mm.write_str(s);
                 }
@@ -382,7 +382,7 @@ impl<
             return Poll::Ready(String::from(self_ref.text.as_str()));
         }
         let k = (|| match IO_DEVS.get().force_maybeinitdev() {
-            MaybeInitDevice::GotMman(d, d2) => {
+            MaybeInitDevice::GotMman(d, _d2) => {
                 for k in d {
                     match k.read_chr() {
                         Some(k) => {
@@ -483,5 +483,5 @@ impl log::Log for KLogImpl {
 
 #[no_mangle]
 pub fn out(s: &str) {
-    // print!("{}", s);
+    print!("{}", s);
 }

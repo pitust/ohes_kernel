@@ -4,7 +4,7 @@ ezy_static! { CANARIES, Vec<(VirtAddr, String, u64)>, vec![] }
 
 
 pub fn add_canary(p: VirtAddr, s: String, size: u64) {
-    let q = unsafe { p.as_ptr::<u8>() };
+    let q = p.as_ptr::<u8>();
     unsafe {
         *(q as *mut u64) = 0xdeadbeef;
     }
@@ -19,7 +19,7 @@ extern {
 
 pub fn stk_chk() {
     for c in CANARIES.get() {
-        let q = unsafe { c.0.as_ptr::<u8>() };
+        let q = c.0.as_ptr::<u8>();
         let stka = unsafe {
             *(q as *mut u64)
         };
