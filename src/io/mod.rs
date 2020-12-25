@@ -46,10 +46,10 @@ lazy_static! {
     pub static ref IO_DEVS: Mutex<MaybeInitDevice> = Mutex::new(MaybeInitDevice::NoMman);
 }
 
-pub fn proper_init_for_iodevs(mbstruct: &'static multiboot2::BootInformation) {
+pub fn proper_init_for_iodevs(mbstruct: &'static multiboot::information::Multiboot) {
     // we got mman now! let's get i/o subsystem fixed
     // first, parse out kcmdline
-    let kcmdline = mbstruct.command_line_tag().unwrap().command_line();
+    let kcmdline = mbstruct.command_line().unwrap();
     let mut devs: alloc::vec::Vec<Box<dyn device::IODevice>> = alloc::vec![];
     let mut ddevs: alloc::vec::Vec<Box<dyn device::IODevice>> = alloc::vec![];
     let mut nid = false;
@@ -86,26 +86,6 @@ pub fn proper_init_for_iodevs(mbstruct: &'static multiboot2::BootInformation) {
             devs.push(box device::debugcon::DebugCon { port: 0x402 });
             if nid {
                 ddevs.push(box device::debugcon::DebugCon { port: 0x402 });
-            }
-        }
-        if op == "textvga" {
-            devs.push(box device::multiboot_text::MultibootText::new(
-                mbstruct.framebuffer_tag().unwrap(),
-            ));
-            if nid {
-                ddevs.push(box device::multiboot_text::MultibootText::new(
-                    mbstruct.framebuffer_tag().unwrap(),
-                ));
-            }
-        }
-        if op == "graphicz" {
-            devs.push(box device::multiboot_vga::MultibootVGA::new(
-                mbstruct.framebuffer_tag().unwrap(),
-            ));
-            if nid {
-                ddevs.push(box device::multiboot_vga::MultibootVGA::new(
-                    mbstruct.framebuffer_tag().unwrap(),
-                ));
             }
         }
         if op == "kbdint" {

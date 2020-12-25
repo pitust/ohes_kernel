@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::task::{simple_executor::SimpleExecutor, Task};
 use core::panic::PanicInfo;
-use multiboot2::BootInformation;
+use multiboot::information::{MemoryManagement, Multiboot};
 use x86_64::{VirtAddr, registers::control::{Cr3, Cr3Flags}, structures::paging::{PhysFrame, Size4KiB}};
 use xmas_elf::{self, symbol_table::Entry};
 
@@ -102,11 +102,30 @@ pub fn forkp() -> (PhysFrame, Cr3Flags) {
         flags,
     )
 }
+
+struct BadMMAN;
+impl MemoryManagement for BadMMAN {
+    unsafe fn paddr_to_slice(&self, addr: multiboot::information::PAddr, length: usize) -> Option<&'static [u8]> {
+        Some(core::slice::from_raw_parts(addr as u64 as *const u8, length))
+    }
+
+    unsafe fn allocate(&mut self, length: usize) -> Option<(multiboot::information::PAddr, &mut [u8])> {
+        None
+    }
+
+    unsafe fn deallocate(&mut self, addr: multiboot::information::PAddr) {
+        unreachable!()
+    }
+}
+
+
 #[no_mangle]
 pub extern "C" fn kmain(boot_info_ptr: u64) -> ! {
     // ralloc::Allocator
-    let ptr = unsafe { multiboot2::load(boot_info_ptr as usize) };
-    let boot_info = unsafe { &*((&ptr) as *const BootInformation) as &'static BootInformation };
+    let mut bad_mman = BadMMAN;
+    let bad_mman = unsafe { &mut *((&mut bad_mman) as *mut BadMMAN) as &'static mut BadMMAN };
+    let ptr = unsafe { multiboot::information::Multiboot::from_ptr(boot_info_ptr, bad_mman).unwrap() };
+    let boot_info = unsafe { &*((&ptr) as *const Multiboot) as &'static Multiboot };
     constants::check_const_correct();
     init::init(boot_info);
     {

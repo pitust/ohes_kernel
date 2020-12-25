@@ -10,7 +10,7 @@ use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 use x86_64::VirtAddr;
 pub struct WrapperAlloc {}
-#[global_allocator]
+#[cfg_attr(not(address_cleaner), global_allocator)]
 pub static WRAPPED_ALLOC: WrapperAlloc = WrapperAlloc {};
 impl WrapperAlloc {
     pub unsafe fn do_alloc(&self, layout: Layout) -> *mut u8 {
@@ -31,6 +31,15 @@ unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         return self.do_dealloc(ptr, layout);
+    }
+}
+unsafe impl core::alloc::Allocator for WrapperAlloc {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, core::alloc::AllocError> {
+        return unsafe { Ok(NonNull::new(core::slice::from_raw_parts_mut(self.do_alloc(layout), layout.size())).unwrap()) };
+    }
+
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        self.do_dealloc(ptr.as_ptr(), layout);
     }
 }
 pub static ALLOCATOR: crate::shittymutex::Mutex<Heap> =

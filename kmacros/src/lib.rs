@@ -44,6 +44,7 @@ fn getfilez(dir: &Path, cb: &mut dyn FnMut(&DirEntry)) -> io::Result<()> {
 
 #[proc_macro_attribute]
 pub fn handle_read(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    
     let mut v = vec![];
     getfilez(Path::new("rootfs"), &mut |d| {
         let d: &DirEntry = d;

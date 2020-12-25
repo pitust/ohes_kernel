@@ -1,11 +1,11 @@
 use crate::{dprintln, println};
 use alloc::{alloc::Layout, vec::Vec};
 use allocator::CUR_ADDR_PUB;
+use multiboot::information::{MemoryMapIter, MemoryType};
 // use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 use crate::shittymutex::Mutex;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use lazy_static::lazy_static;
-use multiboot2::{MemoryArea, MemoryAreaType, MemoryMapTag};
 use x86_64::structures::paging::page_table::PageTable;
 use x86_64::structures::paging::{
     FrameAllocator, Mapper, MapperAllSizes, OffsetPageTable, Page, PageTableFlags, PhysFrame,
@@ -81,6 +81,9 @@ pub fn convpm<T>(x: *mut T) -> u64 {
         .unwrap()
         .as_u64()
 }
+pub fn ispm<T>(x: *mut T) -> bool {
+    crate::memory::translate(VirtAddr::new(x as u64)).is_some()
+}
 pub fn translate(addr: VirtAddr) -> Option<PhysAddr> {
     get_mapper().translate_addr(addr)
 }
@@ -134,10 +137,10 @@ pub fn create_example_mapping(page: Page, frame_allocator: &mut impl FrameAlloca
     map_to_result.expect("map_to failed").flush();
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-#[derive(Debug, Copy, Clone)]
+static NEXT: AtomicUsize = AtomicUsize::new(0x100000);
+#[derive(Copy, Clone)]
 pub struct BootInfoFrameAllocator {
-    memory_map: &'static MemoryMapTag,
+    end: u64,
 }
 
 extern "C" {
@@ -147,29 +150,24 @@ extern "C" {
 }
 
 impl BootInfoFrameAllocator {
-    pub unsafe fn init(memory_map: &'static MemoryMapTag) -> Self {
-        BootInfoFrameAllocator { memory_map }
-    }
-    fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> {
-        let regions = self.memory_map.memory_areas();
-        let usable_regions = regions.filter(|r| r.typ() == MemoryAreaType::Available);
-        let addr_ranges = usable_regions.map(|r| r.start_address()..r.end_address());
-        let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-        frame_addresses
-            .filter(|p| unsafe { core::mem::transmute::<&u8, u64>(&ee) < *p })
-            .map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
-    }
-    pub fn show(&self) {
-        let x: Vec<PhysFrame<Size4KiB>> = self.usable_frames().collect();
-        println!("Frames: {:#?}", x);
+    pub unsafe fn init(size: u32) -> Self {
+        BootInfoFrameAllocator {
+            end: 0x100000 + (size as u64 * 0x400),
+        }
     }
 }
+unsafe impl Send for BootInfoFrameAllocator {}
+unsafe impl Sync for BootInfoFrameAllocator {}
 unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
-        let frame = self
-            .usable_frames()
-            .nth(NEXT.fetch_add(1, Ordering::Relaxed));
-        frame
+        loop {
+            let a = NEXT.fetch_add(4096, Ordering::Relaxed) as u64;
+            assert!(a < self.end);
+            if unsafe { (&ee as *const u8 as u64) > a } {
+                continue;
+            }
+            return Some(PhysFrame::from_start_address(PhysAddr::new(a)).unwrap());
+        }
     }
 }
 lazy_static! {

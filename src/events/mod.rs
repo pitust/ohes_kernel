@@ -91,7 +91,7 @@ ezy_static! { EVENT_LISTENERS, BTreeMap<EventListenerID, EventListener>, BTreeMa
 ezy_static! { EVENT_NAME_TO_ID, BTreeMap<String, u32>, BTreeMap::new() }
 counter!(ListenerId);
 pub fn create_listener(name: String, public: bool) -> EventListenerIDInterface {
-    let id = ListenerId.inc();
+    let id = ListenerId::inc();
     let id = id as u32;
     let idstruct = EventListenerID {
         id,

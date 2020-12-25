@@ -1,10 +1,12 @@
 run: build/oh_es.iso build/data.img
-	qemu-system-x86_64 -hda build/oh_es.iso -s -debugcon file:logz.txt -global isa-debugcon.iobase=0x402 -accel kvm -cpu host -vnc :1 -monitor none -serial stdio
-build/oh_es.iso: build/kernel.elf cfg/grub.cfg
+	qemu-system-x86_64 -hda build/oh_es.iso -s -debugcon file:logz.txt -global isa-debugcon.iobase=0x402 -accel kvm -cpu host -vnc :1 -monitor none -serial stdio -m 1G
+
+build/oh_es.iso: build/debugkernel.elf build/releasekernel.elf cfg/grub.cfg
 	rm -rf iso
 	mkdir -p iso/boot/grub
 	cp cfg/grub.cfg iso/boot/grub
-	cp build/kernel.elf iso/boot
+	cp build/debugkernel.elf iso/boot
+	cp build/releasekernel.elf iso/boot
 	# grub-mkrescue -o build/oh_es.iso iso
 	xorriso -as mkisofs -graft-points --modification-date=2020111621031700 \
 		-b boot/grub/i386-pc/eltorito.img -no-emul-boot -boot-load-size 4 \
@@ -13,12 +15,19 @@ build/oh_es.iso: build/kernel.elf cfg/grub.cfg
 		--efi-boot efi.img -efi-boot-part --efi-boot-image --protective-msdos-label \
 		-o build/oh_es.iso -r cfg/grub --sort-weight 0 / --sort-weight 1 /boot iso
 
-build/kernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
-	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/kernel.elf -n
-	grub-file --is-x86-multiboot2 build/kernel.elf
+build/debugkernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
+	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/debugkernel.elf -n
+	grub-file --is-x86-multiboot build/debugkernel.elf
+
+build/releasekernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
+	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/releasekernel.elf -n
+	strip build/releasekernel.elf
+	# sstrip build/releasekernel.elf
+	grub-file --is-x86-multiboot build/releasekernel.elf
+
 build/test.elf: build/test.o
 	ld -T user/user.ld build/test.o -o build/test.elf
-target/x86_64-unknown-none/debug/liban_os.a: faux build/test.elf
+target/x86_64-unknown-none/debug/liban_os.a: faux
 	cargo build --features "fini_exit debug_logs"
 build/initrd.cpio: $(wildcard initrd/*) build/kernel.elf initrd/ksymmap.pcrd
 	sh create-initrd.sh

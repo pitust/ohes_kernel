@@ -37,7 +37,7 @@ dependencies = [
  "libc",
  "linked_list_allocator",
  "log",
- "multiboot2",
+ "multiboot",
  "pc-keyboard",
  "pic8259_simple",
  "postcard",
@@ -335,13 +335,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
-name = "multiboot2"
-version = "0.9.0"
+name = "multiboot"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9a649a4ee63c693e6f1cdc048e80136f9863c75952c72508b8305b0b8889759"
+checksum = "0f442c65adef7bc9676eb8212598d14b7ba799b8bb2a312ed32f410e85e2f5ad"
 dependencies = [
- "bitflags",
+ "paste",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5d65c4d95931acda4498f675e332fcbdc9a06705cd07086c510e9b6009cd1c1"
 
 [[package]]
 name = "pc-keyboard"

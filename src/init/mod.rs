@@ -31,12 +31,12 @@ fn gdt() {
         load_tss(interrupts::GDT.1.tss_selector);
     }
 }
-pub fn init(boot_info: &'static multiboot2::BootInformation) {
+pub fn init(boot_info: &'static multiboot::information::Multiboot) {
     println!("[kinit] Setting up Oh Es");
     println!("[kinit] [mman] initializing...");
     unsafe {
         *memory::FRAME_ALLOC.get() = Some(memory::BootInfoFrameAllocator::init(
-            &boot_info.memory_map_tag().unwrap(),
+            boot_info.upper_memory_bound().unwrap(),
         ));
     }
     println!("[kinit] [mman] we have frame allocation!");

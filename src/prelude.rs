@@ -37,21 +37,29 @@ macro_rules! _ezy_static {
 #[macro_export]
 macro_rules! counter {
     ( $NAME: ident ) => {
-        pub static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        struct $NAME;
-        #[allow(dead_code)]
-        impl $NAME {
-            pub fn get(&self) -> usize {
+        pub mod $NAME {
+            use $crate::prelude::*;
+            static COUNTER: AtomicUsize = AtomicUsize::new(0);
+            pub fn get() -> usize {
                 return COUNTER.load(Ordering::Relaxed);
             }
-            pub fn inc(&self) -> usize {
+            pub fn inc() -> usize {
                 return COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
             }
-            pub fn reset(&self) -> usize {
-                let old = self.get();
+            pub fn dec() -> usize {
+                return COUNTER.fetch_sub(1, Ordering::Relaxed) - 1;
+            }
+            pub fn addn(n: usize) -> usize {
+                return COUNTER.fetch_add(n, Ordering::Relaxed) + n;
+            }
+            pub fn subn(n: usize) -> usize {
+                return COUNTER.fetch_sub(n, Ordering::Relaxed) - n;
+            }
+            pub fn reset() -> usize {
+                let old = get();
                 COUNTER.store(0, Ordering::Relaxed);
                 return old;
             }
         }
-    };
+    }
 }

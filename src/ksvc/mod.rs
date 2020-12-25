@@ -24,6 +24,37 @@ pub enum FSResult {
     Failure(String),
 }
 
+// io ops
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum KIOOpResult {
+    Success,
+    ReadResultByte(u8),
+    ReadResultWord(u16),
+    ReadResultDWord(u32),
+    ReadResultQWord(u64),
+    Failure(String),
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum IOOpData {
+    WriteByte(u8),
+    WriteWord(u16),
+    WriteDWord(u32),
+    WriteQWord(u64),
+
+    ReadByte(),
+    ReadWord(),
+    ReadDWord(),
+    ReadQWord(),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct IOOp {
+    pub port: u16,
+    pub data: IOOpData,
+}
+
+// end io
+
 pub fn ksvc_init() {
     let t = KSVC_TABLE.get();
 
@@ -50,6 +81,21 @@ pub fn ksvc_init() {
         let d: u64 = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();
         dprint!("[punmap] UnMapping {:#x?}", d);
         memory::munmap(VirtAddr::from_ptr(d as *const u8));
+    });
+    t.insert("kio".to_string(), box || unsafe {
+        let d: IOOp = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();
+        let r: KIOOpResult = match d.data {
+            IOOpData::WriteByte(b) => { outb(d.port, b); KIOOpResult::Success }
+            IOOpData::WriteWord(w) => { outw(d.port, w); KIOOpResult::Success }
+            IOOpData::WriteDWord(dw) => { outl(d.port, dw); KIOOpResult::Success }
+            IOOpData::WriteQWord(q) => { KIOOpResult::Failure("no support :(".to_string()) }
+            IOOpData::ReadByte() => { KIOOpResult::ReadResultByte(inb(d.port)) }
+            IOOpData::ReadWord() => { KIOOpResult::ReadResultWord(inw(d.port)) }
+            IOOpData::ReadDWord() => { KIOOpResult::ReadResultDWord(inl(d.port)) }
+            IOOpData::ReadQWord() => { KIOOpResult::Failure("no support :(".to_string()) }
+        };
+        let x = postcard::to_allocvec(&r).unwrap();
+        preempt::CURRENT_TASK.get().box1 = Some(x.leak());
     });
     t.insert("kfs".to_string(), box || {
         let d: (FSOp, String) = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();

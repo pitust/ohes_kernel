@@ -17,6 +17,13 @@
             "info-fun"
         ]
     },
+    "do-shutdown": {
+        "trigger_after": "target:boot",
+        "run": [
+            "shtdwn"
+        ],
+        "wants": []
+    },
     "info-fun": {
         "run": [
             "kinfo",

@@ -2,8 +2,8 @@ use crate::prelude::*;
 
 pub mod debugcon;
 pub mod kbdint_input;
-pub mod multiboot_text;
-pub mod multiboot_vga;
+// pub mod multiboot_text;
+// pub mod multiboot_vga;
 pub mod serial;
 pub mod virt;
 

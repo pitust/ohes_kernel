@@ -1,18 +1,12 @@
 section .multiboot_header
-header_start:
-    dd 0xe85250d6                ; magic number (multiboot 2)
-    dd 0                         ; architecture 0 (protected mode i386)
-    dd header_end - header_start ; header length
-    ; checksum
-    dd -(0xe85250d6 + 0 + (header_end - header_start))
-
-    ; insert optional multiboot tags here
-
-    ; required end tag
-    dw 0    ; type
-    dw 0    ; flags
-    dd 8    ; size
-header_end:
+    MAGIC_NUMBER equ 0x1BADB002     ; define the magic number constant
+    FLAGS        equ 0x0            ; multiboot flags
+    CHECKSUM     equ -MAGIC_NUMBER  ; calculate the checksum
+dd MAGIC_NUMBER             ; write the magic number to the machine code,
+dd FLAGS                    ; the flags,
+dd CHECKSUM                 
+entry_maybe:
+    jmp _start
 
 section .bss
 align 4096
@@ -42,6 +36,13 @@ extern kmain
 section .text
 bits 32
 _start:
+    mov dx, 0x402
+    mov ax, 0x4f
+    out dx, ax
+    mov ax, 0x4b
+    out dx, ax
+    mov ax, 0x0a
+    out dx, ax
     ;now enable SSE and the like
     mov eax, cr0
     and ax, 0xFFFB		;clear coprocessor emulation CR0.EM
