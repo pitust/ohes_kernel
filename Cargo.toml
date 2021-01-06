@@ -19,7 +19,7 @@ x86 = "0.34.0"
 x86_64 = "0.12.0"
 xmas-elf = "0.7.0"
 multiboot = "0.6.0"
-
+  
 [dependencies.conquer-once]
 default-features = false
 version = "0.2.0"

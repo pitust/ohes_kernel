@@ -41,7 +41,21 @@ pub fn stack_alloc(stack_size: u64) -> Result<*const u8, MapToError<Size4KiB>> {
     Ok(base as *const u8)
 }
 static TASK_QUEUE_CUR: AtomicUsize = AtomicUsize::new(0);
-// privesc would be CURRENT_TASK.get().pid |= 1. just sayin' you know.
+#[derive(Copy, Clone, Debug)]
+enum WakeType {
+    WakeConnection,
+    WakeServerReady,
+    WakeProcessExited { code: u64 },
+    WakeResponded,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Wakeop {
+    wake_type: WakeType,
+    waker: u64,
+    is_cross_task_call: bool,
+}
+// privesc would be CURRENT_TASK.get().uid = 0. just sayin' you know.
 #[derive(Copy, Clone, Debug)]
 pub struct Task {
     pub state: Jmpbuf,
@@ -51,11 +65,12 @@ pub struct Task {
     pub box1: Option<&'static [u8]>,
     pub box2: Option<&'static [u8]>,
     pub program_break: u64,
-    pub is_listening: bool,
-    pub is_done: bool,
+    pub wakeop: Option<Wakeop>,
+    pub needs_wake: bool,
+    pub uid: i32,
 }
-ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false }] }
-ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, is_listening: false, is_done: false } }
+ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1 }] }
+ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1 } }
 extern "C" fn get_next(buf: &mut Jmpbuf) {
     let tq = TASK_QUEUE.get();
     let mut ct = CURRENT_TASK.clone();
@@ -143,26 +158,12 @@ fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64, stknm: String) {
             box1: None,
             box2: None,
             program_break: 0,
-            is_listening: false,
-            is_done: false,
+            wakeop: None,
+            needs_wake: false,
+            uid: -1,
         });
     });
 }
 
 #[cfg(test)]
 static VAL: AtomicU64 = AtomicU64::new(3);
-
-#[test_case]
-pub fn test_tasks() {
-    testing::test_header("Yields");
-    task_alloc(|| {
-        VAL.store(0, Ordering::Release);
-    });
-    // now
-    yield_task();
-    if VAL.load(Ordering::Relaxed) != 3 {
-        testing::test_ok();
-    } else {
-        testing::test_fail();
-    }
-}
