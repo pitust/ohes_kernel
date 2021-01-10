@@ -40,7 +40,10 @@ impl RODev for GPTPart {
         self.drive.read_unaligned(self.map_va(addr)?, len)
     }
     fn vector_read_ranges(&mut self, ops: &mut [(u64, u64)]) -> Vec<u8> {
-        let mut ops: Vec<(u64, u64)> = ops.into_iter().map(|p| (self.map_va(p.0).unwrap(), p.1)).collect();
+        let mut ops: Vec<(u64, u64)> = ops
+            .into_iter()
+            .map(|p| (self.map_va(p.0).unwrap(), p.1))
+            .collect();
         let q = self.drive.vector_read_ranges(&mut ops);
         if q.len() == 0 {
             panic!("RF");

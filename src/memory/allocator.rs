@@ -35,7 +35,13 @@ unsafe impl core::alloc::GlobalAlloc for WrapperAlloc {
 }
 unsafe impl core::alloc::Allocator for WrapperAlloc {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, core::alloc::AllocError> {
-        return unsafe { Ok(NonNull::new(core::slice::from_raw_parts_mut(self.do_alloc(layout), layout.size())).unwrap()) };
+        return unsafe {
+            Ok(NonNull::new(core::slice::from_raw_parts_mut(
+                self.do_alloc(layout),
+                layout.size(),
+            ))
+            .unwrap())
+        };
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {

@@ -28,7 +28,7 @@ build/releasekernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.
 build/test.elf: build/test.o
 	ld -T user/user.ld build/test.o -o build/test.elf
 target/x86_64-unknown-none/debug/liban_os.a: faux
-	cargo build --features "fini_exit debug_logs"
+	cargo build --features "fini_exit debug_logs address_cleaner"
 build/initrd.cpio: $(wildcard initrd/*) build/kernel.elf initrd/ksymmap.pcrd
 	sh create-initrd.sh
 initrd/ksymmap.pcrd: build/ksymmap.pcrd

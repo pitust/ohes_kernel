@@ -10,6 +10,7 @@ pub use core::sync::atomic::*;
 pub use lazy_static::lazy_static;
 pub use x86::io::*;
 pub use x86_64::VirtAddr;
+pub use preempt::glblutil::*;
 #[macro_export]
 #[allow(non_upper_case_globals)]
 macro_rules! ezy_static {
@@ -61,5 +62,5 @@ macro_rules! counter {
                 return old;
             }
         }
-    }
+    };
 }

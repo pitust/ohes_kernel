@@ -74,7 +74,9 @@ pub fn proper_init_for_iodevs(mbstruct: &'static multiboot::information::Multibo
         }
         if op.starts_with("input-txt=") {
             let dat = op.split_at(10).1;
-            devs.push(box device::virt::Repe { s: dat.to_string() + "\n" });
+            devs.push(box device::virt::Repe {
+                s: dat.to_string() + "\n",
+            });
         }
         if op == "default_serial" {
             devs.push(box device::serial::Serial::new(0x3F8));

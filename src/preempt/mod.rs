@@ -41,19 +41,18 @@ pub fn stack_alloc(stack_size: u64) -> Result<*const u8, MapToError<Size4KiB>> {
     Ok(base as *const u8)
 }
 static TASK_QUEUE_CUR: AtomicUsize = AtomicUsize::new(0);
-#[derive(Copy, Clone, Debug)]
-enum WakeType {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WakeType {
     WakeConnection,
     WakeServerReady,
     WakeProcessExited { code: u64 },
     WakeResponded,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Wakeop {
-    wake_type: WakeType,
-    waker: u64,
-    is_cross_task_call: bool,
+    pub wake_type: WakeType,
+    pub waker: u64,
 }
 // privesc would be CURRENT_TASK.get().uid = 0. just sayin' you know.
 #[derive(Copy, Clone, Debug)]
@@ -68,9 +67,20 @@ pub struct Task {
     pub wakeop: Option<Wakeop>,
     pub needs_wake: bool,
     pub uid: i32,
+    pub currently_responding_to: u64,
 }
-ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1 }] }
-ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1 } }
+pub mod glblutil {
+	use crate::prelude::*;
+	pub fn task() -> &'static mut preempt::Task {
+		preempt::CURRENT_TASK.get()
+	}
+	pub fn pid() -> u64 {
+		task().pid
+	}
+	pub fn sched_yield() { preempt::yield_task(); }
+}
+ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1, currently_responding_to: 0 }] }
+ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1, currently_responding_to: 0 } }
 extern "C" fn get_next(buf: &mut Jmpbuf) {
     let tq = TASK_QUEUE.get();
     let mut ct = CURRENT_TASK.clone();
@@ -81,7 +91,19 @@ extern "C" fn get_next(buf: &mut Jmpbuf) {
         Ordering::Relaxed,
     );
     let q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
-    *CURRENT_TASK.get() = q;
+	*CURRENT_TASK.get() = q;
+	
+	while CURRENT_TASK.get().needs_wake {
+		tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = ct;
+		TASK_QUEUE_CUR.store(
+			TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
+			Ordering::Relaxed,
+		);
+		let q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
+		*CURRENT_TASK.get() = q;
+	}
+
+	let q = *CURRENT_TASK.get();
     crate::interrupts::set_rsp0(q.rsp0);
     crate::userland::set_rsp_ptr(q.rsp_ptr);
     *buf = q.state;
@@ -161,6 +183,7 @@ fn jump_to_task(newfcn: fn(arg: u64) -> (), arg: u64, stknm: String) {
             wakeop: None,
             needs_wake: false,
             uid: -1,
+            currently_responding_to: 0,
         });
     });
 }

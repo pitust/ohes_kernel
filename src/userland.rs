@@ -4,6 +4,7 @@ use crate::{
     prelude::*,
 };
 use kmacros::handle_read;
+use preempt::WakeType;
 use x86_64::{
     structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB},
     VirtAddr,
@@ -34,13 +35,18 @@ fn user_gets(mut ptr: *mut u8, n: u64) -> String {
     }
     String::from_utf8(s).unwrap()
 }
+pub struct Service {
+    pid: u64,
+    is_active: bool,
+    activate_pids: LinkedList<u64>,
+}
 
-ezy_static! { SVC_MAP, spin::Mutex<BTreeMap<String, u64>>, spin::Mutex::new(BTreeMap::new()) }
+ezy_static! { SVC_MAP, spin::Mutex<BTreeMap<String, Service>>, spin::Mutex::new(BTreeMap::new()) }
 fn freebox1() {
-    match preempt::CURRENT_TASK.box1 {
+    match task().box1 {
         Some(s) => {
             // free it
-            preempt::CURRENT_TASK.get().box1 = None;
+            task().box1 = None;
             unsafe {
                 Box::from_raw(s as *const [u8] as *mut [u8]);
             }
@@ -49,10 +55,10 @@ fn freebox1() {
     };
 }
 fn freebox2() {
-    match preempt::CURRENT_TASK.box2 {
+    match task().box2 {
         Some(s) => {
             // free it
-            preempt::CURRENT_TASK.get().box2 = None;
+            task().box2 = None;
             unsafe {
                 Box::from_raw(s as *const [u8] as *mut [u8]);
             }
@@ -61,7 +67,7 @@ fn freebox2() {
     };
 }
 pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
-    dprintln!(" ===> enter {} {:#x?}", preempt::CURRENT_TASK.pid, sysno);
+    dprintln!(" ===> enter {} {:#x?}", task().pid, sysno);
     let v = match sysno {
         0 => {
             /* sys_exit */
@@ -71,10 +77,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         1 => {
             /* sys_bindbuffer */
-            match preempt::CURRENT_TASK.box1 {
+            match task().box1 {
                 Some(s) => {
                     // free it
-                    preempt::CURRENT_TASK.get().box1 = None;
+                    task().box1 = None;
                     unsafe {
                         Box::from_raw(s as *const [u8] as *mut [u8]);
                     }
@@ -86,19 +92,19 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             unsafe {
                 accelmemcpy(p.as_mut_ptr(), arg1 as *const u8, arg2 as usize);
             }
-            preempt::CURRENT_TASK.get().box1 = Some(Box::leak(p.into_boxed_slice()));
+            task().box1 = Some(Box::leak(p.into_boxed_slice()));
             0
         }
         2 => {
             /* sys_getbufferlen */
-            match preempt::CURRENT_TASK.box1 {
+            match task().box1 {
                 Some(s) => s.len() as u64,
                 None => 0,
             }
         }
         3 => {
             /* sys_readbuffer */
-            match preempt::CURRENT_TASK.box1 {
+            match task().box1 {
                 Some(s) => {
                     unsafe {
                         accelmemcpy(arg1 as *mut u8, s.as_ptr(), s.len());
@@ -110,10 +116,10 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         4 => {
             /* sys_swapbuffers */
-            let buf1 = preempt::CURRENT_TASK.box1;
-            let buf2 = preempt::CURRENT_TASK.box2;
-            preempt::CURRENT_TASK.get().box2 = buf1;
-            preempt::CURRENT_TASK.get().box1 = buf2;
+            let buf1 = task().box1;
+            let buf2 = task().box2;
+            task().box2 = buf1;
+            task().box1 = buf2;
             0
         }
         5 => {
@@ -121,31 +127,56 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
             let target = user_gets(arg1 as *mut u8, arg2);
             if target == "kfs" {
                 ksvc::dofs();
-                dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
+                dprintln!(" <=== exit {}", task().pid);
                 return 0;
             }
             x86_64::instructions::interrupts::without_interrupts(|| {
                 if ksvc::KSVC_TABLE.contains_key(&target) {
                     ksvc::KSVC_TABLE.get().get(&target).unwrap()();
-                    dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
+                    dprintln!(" <=== exit {}", task().pid);
                     return;
-                }
-                let p = *SVC_MAP.lock().get(&target).unwrap();
+				}
+				let mut svclock = SVC_MAP.lock();
+                let p = svclock.get_mut(&target).unwrap();
                 for r in preempt::TASK_QUEUE.get().iter_mut() {
-                    if p == r.pid {
-                        while !r.is_listening {
+                    if p.pid == r.pid {
+                        while !p.is_active {
+                            p.activate_pids.push_back(task().pid);
+                            task().needs_wake = true;
                             preempt::yield_task();
+                            assert_eq!(
+                                task().wakeop,
+                                Some(preempt::Wakeop {
+                                    wake_type: preempt::WakeType::WakeServerReady,
+                                    waker: p.pid
+                                })
+                            );
                         }
-                        r.is_listening = false;
-                        r.box1 = preempt::CURRENT_TASK.box1;
-                        r.box2 = preempt::CURRENT_TASK.box2;
-                        while !r.is_done {
-                            preempt::yield_task();
-                        }
+                        p.activate_pids.push_back(task().pid);
+                        task().needs_wake = true;
+                        preempt::yield_task();
+                        assert_eq!(
+                            task().wakeop,
+                            Some(preempt::Wakeop {
+                                wake_type: preempt::WakeType::WakeConnection,
+                                waker: p.pid
+                            })
+                        );
+                        r.box1 = task().box1;
+                        r.box2 = task().box2;
+                        task().needs_wake = true;
+                        preempt::yield_task();
+                        assert_eq!(
+                            task().wakeop,
+                            Some(preempt::Wakeop {
+                                wake_type: preempt::WakeType::WakeResponded,
+                                waker: p.pid
+                            })
+                        );
                         freebox1();
                         freebox2();
-                        preempt::CURRENT_TASK.get().box1 = r.box1;
-                        preempt::CURRENT_TASK.get().box1 = r.box2;
+                        task().box1 = r.box1;
+                        task().box1 = r.box2;
                         r.box1 = None;
                         r.box2 = None;
                     }
@@ -156,35 +187,50 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         6 => {
             /* sys_listen */
             let name = user_gets(arg1 as *mut u8, arg2);
-            preempt::CURRENT_TASK.get().is_listening = false;
-            SVC_MAP.lock().insert(name, preempt::CURRENT_TASK.pid);
-            // preempt::CURRENT_TASK.pid
+            SVC_MAP.lock().insert(
+                name,
+                Service {
+                    pid: task().pid,
+                    activate_pids: LinkedList::new(),
+                    is_active: false,
+                },
+            );
             0
         }
         7 => {
             /* sys_accept */
-            let nejm = user_gets(arg1 as *mut u8, arg2);
-            assert_eq!(
-                *SVC_MAP
-                    .lock()
-                    .get(&nejm)
-                    .unwrap(),
-                preempt::CURRENT_TASK.pid
-            );
-            preempt::CURRENT_TASK.get().is_done = false;
-            preempt::CURRENT_TASK.get().is_listening = true;
-            x86_64::instructions::interrupts::without_interrupts(|| {
-                while preempt::CURRENT_TASK.get().is_listening {
-                    preempt::yield_task()
+			let nejm = user_gets(arg1 as *mut u8, arg2);
+			let mut ent  = SVC_MAP.lock();
+            let svc = ent.get_mut(&nejm).unwrap();
+            let q = svc.activate_pids.pop_front();
+            if q != None {
+                let q = q.unwrap();
+                for r in preempt::TASK_QUEUE.get().iter_mut() {
+                    if q == r.pid {
+                        assert!(r.needs_wake);
+                        r.wakeop = Some(preempt::Wakeop {
+                            wake_type: preempt::WakeType::WakeServerReady,
+                            waker: task().pid,
+                        });
+                        r.needs_wake = false;
+                        break;
+                    }
                 }
-            });
-
-            0
+            }
+            task().needs_wake = true;
+			preempt::yield_task();
+            assert_eq!(
+                task().wakeop.unwrap().wake_type,
+                WakeType::WakeConnection
+			);
+			
+			task().currently_responding_to = task().wakeop.unwrap().waker;
+			0
         }
         8 => {
             /* sys_exec */
             x86_64::instructions::interrupts::without_interrupts(|| {
-                let l = preempt::CURRENT_TASK.box1;
+                let l = task().box1;
                 do_exec(l.unwrap());
             });
             0
@@ -192,23 +238,36 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         9 => {
             /* sys_respond */
             x86_64::instructions::interrupts::without_interrupts(|| {
-                preempt::CURRENT_TASK.get().is_done = true;
-                preempt::yield_task();
-                preempt::CURRENT_TASK.get().is_done = true;
+				let resp = task().currently_responding_to;
+				
+                for r in preempt::TASK_QUEUE.get().iter_mut() {
+                    if resp == r.pid {
+						assert!(r.needs_wake);
+						r.needs_wake = false;
+						r.wakeop = Some(preempt::Wakeop {
+                            wake_type: preempt::WakeType::WakeResponded,
+                            waker: task().pid,
+						});
+						sched_yield();
+						assert_eq!(task().box1, None);
+						assert_eq!(task().box2, None);
+					}
+				}
             });
             0
         }
         10 => {
             /* sys_klog */
-            print!("{}", user_gets(arg1 as *mut u8, arg2));
+			print!("{}", user_gets(arg1 as *mut u8, arg2));
+			
             0
         }
         11 => {
             /* sys_sbrk */
             let len = arg1;
-            let oldbrk = preempt::CURRENT_TASK.program_break;
+            let oldbrk = task().program_break;
             let newbrk = ((oldbrk + len + 4095) / 4096) * 4096;
-            preempt::CURRENT_TASK.get().program_break = newbrk;
+            task().program_break = newbrk;
             for i in 0..(((newbrk - oldbrk) / 4096) + 1) {
                 let pageaddr = oldbrk + i * 4096;
 
@@ -224,13 +283,13 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 );
                 preempt::yield_task();
             }
-            dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
+            dprintln!(" <=== exit {}", task().pid);
             return newbrk;
         }
         _ => (-1 as i64) as u64,
     };
 
-    dprintln!(" <=== exit {}", preempt::CURRENT_TASK.pid);
+    dprintln!(" <=== exit {}", task().pid);
     v
 }
 #[no_mangle]
@@ -296,7 +355,9 @@ pub unsafe extern "C" fn new_syscall_trampoline() {
     .global RSP_PTR
     RSP_PTR:
         .space 0x8, 0x00
-    ", options(noreturn));
+    ",
+        options(noreturn)
+    );
 }
 unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
     x86_64::instructions::interrupts::without_interrupts(|| {
@@ -321,7 +382,7 @@ pub fn mkpid(ppid: u64) -> u64 {
     r
 }
 pub fn getpid() -> u64 {
-    preempt::CURRENT_TASK.pid
+    task().pid
 }
 #[handle_read]
 pub fn readfs(path: &str) -> &[u8] {
@@ -377,8 +438,8 @@ pub fn loaduser() {
     // now initialize all the necessary fields.
 
     // To free just fpage() all of the `pages`
-    preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
-    preempt::CURRENT_TASK.get().program_break = ((program_break + 4095) / 4096) * 4096;
+    task().pid = mkpid(task().pid);
+    task().program_break = ((program_break + 4095) / 4096) * 4096;
     unsafe {
         jump_user(exe.header.pt2.entry_point());
     }
@@ -386,56 +447,59 @@ pub fn loaduser() {
 
 pub fn do_exec(kernel: &[u8]) {
     let slice = kernel.to_vec();
-    let ve = preempt::CURRENT_TASK.get().box2.take();
+    let ve = task().box2.take();
     freebox1();
     freebox2();
     let path = String::from_utf8(slice).unwrap();
     let path2 = path.clone();
-    preempt::task_alloc(move || unsafe {
-        x86_64::instructions::interrupts::disable();
-        let slice = readfs(&path);
+    preempt::task_alloc(
+        move || unsafe {
+            x86_64::instructions::interrupts::disable();
+            let slice = readfs(&path);
 
-        let ncr3 = main::forkp();
-        let mut pages: Vec<*mut u8> = vec![];
-        let exe = xmas_elf::ElfFile::new(&slice).unwrap();
-        let mut program_break: u64 = 0xFFFF800000000000;
-        for ph in exe.program_iter() {
-            let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
-            flags |= PageTableFlags::USER_ACCESSIBLE;
-            flags ^= PageTableFlags::NO_EXECUTE;
-            flags |= PageTableFlags::WRITABLE;
-            let page_count = (ph.file_size() + 4095) / 4096;
-            for i in 0..page_count {
-                let data = crate::memory::mpage();
-                pages.push(data);
-                if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
-                    panic!("Invalid target for ELF loader!");
+            let ncr3 = main::forkp();
+            let mut pages: Vec<*mut u8> = vec![];
+            let exe = xmas_elf::ElfFile::new(&slice).unwrap();
+            let mut program_break: u64 = 0xFFFF800000000000;
+            for ph in exe.program_iter() {
+                let mut flags = PageTableFlags::NO_EXECUTE | PageTableFlags::PRESENT;
+                flags |= PageTableFlags::USER_ACCESSIBLE;
+                flags ^= PageTableFlags::NO_EXECUTE;
+                flags |= PageTableFlags::WRITABLE;
+                let page_count = (ph.file_size() + 4095) / 4096;
+                for i in 0..page_count {
+                    let data = crate::memory::mpage();
+                    pages.push(data);
+                    if ph.virtual_addr() + (i * 4096) < 0xFFFF800000000000 {
+                        panic!("Invalid target for ELF loader!");
+                    }
+                    map_to(
+                        VirtAddr::from_ptr(data),
+                        VirtAddr::new(ph.virtual_addr() + (i * 4096)),
+                        flags,
+                    );
                 }
-                map_to(
-                    VirtAddr::from_ptr(data),
-                    VirtAddr::new(ph.virtual_addr() + (i * 4096)),
-                    flags,
+                let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
+                program_break = if maybe_new_program_break < program_break {
+                    program_break
+                } else {
+                    maybe_new_program_break
+                };
+                accelmemcpy(
+                    ph.virtual_addr() as *mut u8,
+                    slice.as_ptr().offset(ph.offset() as isize),
+                    ph.file_size() as usize,
                 );
             }
-            let maybe_new_program_break = ph.virtual_addr() + (page_count * 4096);
-            program_break = if maybe_new_program_break < program_break {
-                program_break
-            } else {
-                maybe_new_program_break
-            };
-            accelmemcpy(
-                ph.virtual_addr() as *mut u8,
-                slice.as_ptr().offset(ph.offset() as isize),
-                ph.file_size() as usize,
-            );
-        }
-        x86_64::registers::control::Cr3::write(ncr3.0, ncr3.1);
-        preempt::CURRENT_TASK.get().box1 = ve;
-        preempt::CURRENT_TASK.get().pid = mkpid(preempt::CURRENT_TASK.pid);
-        preempt::CURRENT_TASK.get().program_break = program_break;
-        x86_64::instructions::interrupts::enable();
-        jump_user(exe.header.pt2.entry_point());
-    }, format!("syscall-stack:{}", path2.clone()));
+            x86_64::registers::control::Cr3::write(ncr3.0, ncr3.1);
+            task().box1 = ve;
+            task().pid = mkpid(task().pid);
+            task().program_break = program_break;
+            x86_64::instructions::interrupts::enable();
+            jump_user(exe.header.pt2.entry_point());
+        },
+        format!("syscall-stack:{}", path2.clone()),
+    );
 }
 
 unsafe fn jump_user(addr: u64) {

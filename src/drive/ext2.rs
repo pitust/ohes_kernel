@@ -425,7 +425,7 @@ pub fn cat(dev: &mut Box<dyn RODev>, inode: u32, sb: &SuperBlock) -> Vec<u8> {
     let f = Ext2InodeAttr::from_bits(ino.perms).unwrap();
     assert!(f.contains(Ext2InodeAttr::REGULARFILE) || f.contains(Ext2InodeAttr::SYMLINK));
     let mut z = read_from_inode(ino, dev, sb);
-    
+
     z.truncate(ino.size as usize);
     z
 }

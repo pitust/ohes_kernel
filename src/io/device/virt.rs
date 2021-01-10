@@ -1,10 +1,9 @@
 use crate::prelude::*;
 pub struct Repe {
-    pub s: String
+    pub s: String,
 }
 impl io::device::IODevice for Repe {
-    fn write_str(&mut self, _s: &str) {
-    }
+    fn write_str(&mut self, _s: &str) {}
 
     fn read_chr(&mut self) -> Option<char> {
         if self.s.len() != 0 {

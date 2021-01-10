@@ -85,14 +85,23 @@ pub fn ksvc_init() {
     t.insert("kio".to_string(), box || unsafe {
         let d: IOOp = postcard::from_bytes(preempt::CURRENT_TASK.box1.unwrap()).unwrap();
         let r: KIOOpResult = match d.data {
-            IOOpData::WriteByte(b) => { outb(d.port, b); KIOOpResult::Success }
-            IOOpData::WriteWord(w) => { outw(d.port, w); KIOOpResult::Success }
-            IOOpData::WriteDWord(dw) => { outl(d.port, dw); KIOOpResult::Success }
-            IOOpData::WriteQWord(q) => { KIOOpResult::Failure("no support :(".to_string()) }
-            IOOpData::ReadByte() => { KIOOpResult::ReadResultByte(inb(d.port)) }
-            IOOpData::ReadWord() => { KIOOpResult::ReadResultWord(inw(d.port)) }
-            IOOpData::ReadDWord() => { KIOOpResult::ReadResultDWord(inl(d.port)) }
-            IOOpData::ReadQWord() => { KIOOpResult::Failure("no support :(".to_string()) }
+            IOOpData::WriteByte(b) => {
+                outb(d.port, b);
+                KIOOpResult::Success
+            }
+            IOOpData::WriteWord(w) => {
+                outw(d.port, w);
+                KIOOpResult::Success
+            }
+            IOOpData::WriteDWord(dw) => {
+                outl(d.port, dw);
+                KIOOpResult::Success
+            }
+            IOOpData::WriteQWord(q) => KIOOpResult::Failure("no support :(".to_string()),
+            IOOpData::ReadByte() => KIOOpResult::ReadResultByte(inb(d.port)),
+            IOOpData::ReadWord() => KIOOpResult::ReadResultWord(inw(d.port)),
+            IOOpData::ReadDWord() => KIOOpResult::ReadResultDWord(inl(d.port)),
+            IOOpData::ReadQWord() => KIOOpResult::Failure("no support :(".to_string()),
         };
         let x = postcard::to_allocvec(&r).unwrap();
         preempt::CURRENT_TASK.get().box1 = Some(x.leak());
@@ -138,7 +147,7 @@ pub fn dofs() {
         let r = FSResult::Data(userland::readfs(&d.1).to_vec());
         let x = postcard::to_allocvec(&r).unwrap();
         preempt::CURRENT_TASK.get().box1 = Some(x.leak());
-        return
+        return;
     }
     let mut drv: Box<dyn RODev> = box drive::SickCustomDev {};
     let gpt = drv.get_gpt_partitions(box || box drive::SickCustomDev {});

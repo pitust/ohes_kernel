@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use queue::ArrayQueue;
 use core::convert::TryInto;
+use queue::ArrayQueue;
 use x86_64::{
     instructions::port::{Port, PortReadOnly, PortWriteOnly},
     VirtAddr,

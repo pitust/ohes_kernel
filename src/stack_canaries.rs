@@ -117,8 +117,11 @@ impl CleaningAlloc {
 
             for n in 0..((paddedsz - layout.size()) / 8) {
                 // (n * 8) as isize
-                if unsafe { (ptr as *mut u64).offset((layout.size() + (n * 8)) as isize).read() }
-                    != 0x1badb0071badb007
+                if unsafe {
+                    (ptr as *mut u64)
+                        .offset((layout.size() + (n * 8)) as isize)
+                        .read()
+                } != 0x1badb0071badb007
                 {
                     println!(
                         "=={}== ERROR: AddressCleaner shadow-space-write (checked at pc {:p})",

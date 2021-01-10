@@ -47,7 +47,7 @@ pub fn init(boot_info: &'static multiboot::information::Multiboot) {
         interrupts::init_idt();
     });
     run_task("pit", || {
-        interrupts::init_timer(1);
+        interrupts::init_timer(100);
     });
     run_task("gdt", gdt);
     let b = box 3;
@@ -121,11 +121,11 @@ pub fn init(boot_info: &'static multiboot::information::Multiboot) {
         task::keyboard::KEY_QUEUE.init_once(|| crossbeam_queue::ArrayQueue::new(100));
     });
 
-    run_task("unwind", || {
-
-        unsafe {
-            unwind::__register_frame((&memory::es) as *const u8 as *mut u8 as *mut c_void, (&memory::esz) as *const u8 as u64 as usize);
-        }
+    run_task("unwind", || unsafe {
+        unwind::__register_frame(
+            (&memory::es) as *const u8 as *mut u8 as *mut c_void,
+            (&memory::esz) as *const u8 as u64 as usize,
+        );
     });
     run_task("ksvc", || {
         ksvc::ksvc_init();
