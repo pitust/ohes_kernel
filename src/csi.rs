@@ -7,6 +7,10 @@ pub fn csi(panicinfo: &PanicInfo) {
     println!(" => Message: {}", panicinfo.message().unwrap());
     println!(" => Crash at: {}", panicinfo.location().unwrap());
     println!(" => We are pid: {}", task().pid);
+    println!(" ======= RSP Pointers =======");
+	for p in stack_canaries::CANARIES.get() {
+		println!("  (addr = {:?} | name = {} | len = {:#x?})", p.0, p.1, p.2);
+	}
     println!(" ======= Processes =======");
     for tsk in preempt::TASK_QUEUE.get() {
 		println!(" == bgnps ==");
