@@ -10,6 +10,5 @@ ksymmap.epcrd
 node_modules/
 iso/
 build/
-cfg/
 fonts/
 /rootfs

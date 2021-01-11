@@ -7,13 +7,7 @@ build/oh_es.iso: build/debugkernel.elf build/releasekernel.elf cfg/grub.cfg
 	cp cfg/grub.cfg iso/boot/grub
 	cp build/debugkernel.elf iso/boot
 	cp build/releasekernel.elf iso/boot
-	# grub-mkrescue -o build/oh_es.iso iso
-	xorriso -as mkisofs -graft-points --modification-date=2020111621031700 \
-		-b boot/grub/i386-pc/eltorito.img -no-emul-boot -boot-load-size 4 \
-		-boot-info-table --grub2-boot-info --grub2-mbr \
-		/usr/lib/grub/i386-pc/boot_hybrid.img -apm-block-size 2048 \
-		--efi-boot efi.img -efi-boot-part --efi-boot-image --protective-msdos-label \
-		-o build/oh_es.iso -r cfg/grub --sort-weight 0 / --sort-weight 1 /boot iso
+	grub-mkrescue -o build/oh_es.iso iso
 
 build/debugkernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
 	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/debugkernel.elf -n

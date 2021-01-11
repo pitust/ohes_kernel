@@ -1,0 +1,9 @@
+label: gpt
+label-id: 2CE3B703-21BF-42BB-BD80-212DEE161923
+device: build/dsk2.iso
+unit: sectors
+first-lba: 2048
+last-lba: 266246
+sector-size: 512
+
+build/dsk2.img : start=        4048, size=        262145, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, uuid=8F2E79B4-20B0-814B-BED4-93603F52A1DD, name="adff"
