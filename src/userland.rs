@@ -1,3 +1,5 @@
+use core::usize;
+
 use crate::{
     drive::{gpt::GetGPTPartitions, RODev},
     memory::map_to,
@@ -135,8 +137,8 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                     ksvc::KSVC_TABLE.get().get(&target).unwrap()();
                     dprintln!(" <=== exit {}", task().pid);
                     return;
-				}
-				let mut svclock = SVC_MAP.lock();
+                }
+                let mut svclock = SVC_MAP.lock();
                 let p = svclock.get_mut(&target).unwrap();
                 for r in preempt::TASK_QUEUE.get().iter_mut() {
                     if p.pid == r.pid {
@@ -199,8 +201,8 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         }
         7 => {
             /* sys_accept */
-			let nejm = user_gets(arg1 as *mut u8, arg2);
-			let mut ent  = SVC_MAP.lock();
+            let nejm = user_gets(arg1 as *mut u8, arg2);
+            let mut ent = SVC_MAP.lock();
             let svc = ent.get_mut(&nejm).unwrap();
             let q = svc.activate_pids.pop_front();
             if q != None {
@@ -218,14 +220,11 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
                 }
             }
             task().needs_wake = true;
-			preempt::yield_task();
-            assert_eq!(
-                task().wakeop.unwrap().wake_type,
-                WakeType::WakeConnection
-			);
-			
-			task().currently_responding_to = task().wakeop.unwrap().waker;
-			0
+            preempt::yield_task();
+            assert_eq!(task().wakeop.unwrap().wake_type, WakeType::WakeConnection);
+
+            task().currently_responding_to = task().wakeop.unwrap().waker;
+            0
         }
         8 => {
             /* sys_exec */
@@ -238,28 +237,28 @@ pub fn syscall_handler(sysno: u64, arg1: u64, arg2: u64) -> u64 {
         9 => {
             /* sys_respond */
             x86_64::instructions::interrupts::without_interrupts(|| {
-				let resp = task().currently_responding_to;
-				
+                let resp = task().currently_responding_to;
+
                 for r in preempt::TASK_QUEUE.get().iter_mut() {
                     if resp == r.pid {
-						assert!(r.needs_wake);
-						r.needs_wake = false;
-						r.wakeop = Some(preempt::Wakeop {
+                        assert!(r.needs_wake);
+                        r.needs_wake = false;
+                        r.wakeop = Some(preempt::Wakeop {
                             wake_type: preempt::WakeType::WakeResponded,
                             waker: task().pid,
-						});
-						sched_yield();
-						assert_eq!(task().box1, None);
-						assert_eq!(task().box2, None);
-					}
-				}
+                        });
+                        sched_yield();
+                        assert_eq!(task().box1, None);
+                        assert_eq!(task().box2, None);
+                    }
+                }
             });
             0
         }
         10 => {
             /* sys_klog */
-			print!("{}", user_gets(arg1 as *mut u8, arg2));
-			
+            print!("{}", user_gets(arg1 as *mut u8, arg2));
+
             0
         }
         11 => {
@@ -375,11 +374,10 @@ unsafe fn accelmemcpy(to: *mut u8, from: *const u8, size: usize) {
         faster_rlibc::fastermemcpy(to, from, size & 0xfffffffffffffff8);
     });
 }
-ezy_static! { PID_COUNTER, u64, 1 }
-pub fn mkpid(ppid: u64) -> u64 {
-    let r = (*PID_COUNTER.get() << 1) | (ppid & 1);
-    *PID_COUNTER.get() += 1;
-    r
+
+counter!(PID_COUNTER);
+pub fn mkpid() -> u64 {
+    PID_COUNTER::inc() as u64
 }
 pub fn getpid() -> u64 {
     task().pid
@@ -438,7 +436,7 @@ pub fn loaduser() {
     // now initialize all the necessary fields.
 
     // To free just fpage() all of the `pages`
-    task().pid = mkpid(task().pid);
+    task().pid = mkpid();
     task().program_break = ((program_break + 4095) / 4096) * 4096;
     unsafe {
         jump_user(exe.header.pt2.entry_point());
@@ -493,7 +491,7 @@ pub fn do_exec(kernel: &[u8]) {
             }
             x86_64::registers::control::Cr3::write(ncr3.0, ncr3.1);
             task().box1 = ve;
-            task().pid = mkpid(task().pid);
+            task().pid = mkpid();
             task().program_break = program_break;
             x86_64::instructions::interrupts::enable();
             jump_user(exe.header.pt2.entry_point());

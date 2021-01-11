@@ -68,6 +68,11 @@ fn panic(info: &PanicInfo) -> ! {
     println!("] stack checking...");
     stack_canaries::stk_chk();
     println!("] stacks checked");
+    println!("] memory checking...");
+    #[cfg(address_cleaner)]
+    stack_canaries::ac_check();
+    println!("] memcheck done");
+    csi::csi(info);
     // unwind::backtrace();
     exiting::exit_fail();
 }

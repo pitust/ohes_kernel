@@ -70,14 +70,16 @@ pub struct Task {
     pub currently_responding_to: u64,
 }
 pub mod glblutil {
-	use crate::prelude::*;
-	pub fn task() -> &'static mut preempt::Task {
-		preempt::CURRENT_TASK.get()
-	}
-	pub fn pid() -> u64 {
-		task().pid
-	}
-	pub fn sched_yield() { preempt::yield_task(); }
+    use crate::prelude::*;
+    pub fn task() -> &'static mut preempt::Task {
+        preempt::CURRENT_TASK.get()
+    }
+    pub fn pid() -> u64 {
+        task().pid
+    }
+    pub fn sched_yield() {
+        preempt::yield_task();
+    }
 }
 ezy_static! { TASK_QUEUE, Vec<Task>, vec![Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("syscall-stack:/bin/init".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1, currently_responding_to: 0 }] }
 ezy_static! { CURRENT_TASK, Task, Task { state: Jmpbuf::new(), rsp0: crate::interrupts::get_rsp0(), rsp_ptr: crate::userland::alloc_rsp_ptr("fake stack".to_string()), pid: 1, box1: None, box2: None, program_break: 0, wakeop: None, needs_wake: false, uid: -1, currently_responding_to: 0 } }
@@ -90,20 +92,19 @@ extern "C" fn get_next(buf: &mut Jmpbuf) {
         TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
         Ordering::Relaxed,
     );
-    let q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
-	*CURRENT_TASK.get() = q;
-	
-	while CURRENT_TASK.get().needs_wake {
-		tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = ct;
-		TASK_QUEUE_CUR.store(
-			TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
-			Ordering::Relaxed,
-		);
-		let q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
-		*CURRENT_TASK.get() = q;
-	}
+    let mut q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
+    *CURRENT_TASK.get() = q;
 
-	let q = *CURRENT_TASK.get();
+    while CURRENT_TASK.get().needs_wake {
+        tq[TASK_QUEUE_CUR.fetch_add(1, Ordering::Relaxed)] = q;
+        TASK_QUEUE_CUR.store(
+            TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len(),
+            Ordering::Relaxed,
+        );
+        q = tq[TASK_QUEUE_CUR.load(Ordering::Relaxed) % tq.len()];
+        *CURRENT_TASK.get() = q;
+    }
+
     crate::interrupts::set_rsp0(q.rsp0);
     crate::userland::set_rsp_ptr(q.rsp_ptr);
     *buf = q.state;

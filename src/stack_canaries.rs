@@ -20,7 +20,7 @@ extern "C" {
 }
 // AddressCleaner CleanGuardedAlloc
 
-ezy_static! { RANGES, Vec<(Layout, String), &'static memory::allocator::WrapperAlloc>, Vec::new_in(&memory::allocator::WRAPPED_ALLOC) }
+ezy_static! { RANGES, Vec<(Layout, u64, bool), &'static memory::allocator::WrapperAlloc>, Vec::new_in(&memory::allocator::WRAPPED_ALLOC) }
 counter!(AddrLo);
 counter!(ReentrancyGuard);
 ezy_static! { _OLD_TMP_ENTER_LAYOUT, Option<Layout>, None }
@@ -39,7 +39,7 @@ impl CleaningAlloc {
                 println!(
                     "=={}== ERROR: AddressCleaner memory-alloc-reentrancy at pc {:p}",
                     preempt::CURRENT_TASK.pid,
-                    unsafe { return_address(0) }
+                    return_address(0)
                 );
                 println!(" => new layout is {:?}", layout);
                 println!(
@@ -81,6 +81,7 @@ impl CleaningAlloc {
 
             ReentrancyGuard::dec();
             _OLD_TMP_ENTER_LAYOUT.get().take();
+            RANGES.get().push((layout, start as u64, true));
             start as *mut u8
         })
     }
@@ -93,7 +94,7 @@ impl CleaningAlloc {
                 println!(
                     "=={}== ERROR: AddressCleaner memory-alloc-reentrancy at pc {:p}",
                     preempt::CURRENT_TASK.pid,
-                    unsafe { return_address(0) }
+                    return_address(0)
                 );
                 println!(" => new layout is {:?}", layout);
                 println!(
@@ -117,16 +118,15 @@ impl CleaningAlloc {
 
             for n in 0..((paddedsz - layout.size()) / 8) {
                 // (n * 8) as isize
-                if unsafe {
-                    (ptr as *mut u64)
-                        .offset((layout.size() + (n * 8)) as isize)
-                        .read()
-                } != 0x1badb0071badb007
+                if (ptr as *mut u64)
+                    .offset((layout.size() + (n * 8)) as isize)
+                    .read()
+                    != 0x1badb0071badb007
                 {
                     println!(
                         "=={}== ERROR: AddressCleaner shadow-space-write (checked at pc {:p})",
                         preempt::CURRENT_TASK.pid,
-                        unsafe { return_address(0) }
+                        return_address(0)
                     );
                     println!(" => memory layout is {:?}", layout);
                     println!(
@@ -145,7 +145,7 @@ impl CleaningAlloc {
                         if i & 0xf == 0 {
                             print!("\n{:p}:", ptr.offset(i));
                         }
-                        let val = unsafe { ptr.read() };
+                        let val = ptr.read();
                         if dat[(i & 3) as usize] == val {
                             println!("  {:#016x?} ", val);
                         } else {
@@ -158,6 +158,13 @@ impl CleaningAlloc {
             for i in 0..(paddedsz / 4096) {
                 let j = i * 4096;
                 memory::munmap(VirtAddr::from_ptr(ptr.offset(j as isize)));
+            }
+
+            for r in RANGES.get() {
+                if r.1 == ptr as u64 {
+                    r.2 = false;
+                    break;
+                }
             }
 
             ralloc::Allocator.dealloc(
@@ -178,6 +185,81 @@ unsafe impl core::alloc::GlobalAlloc for CleaningAlloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         return self.do_dealloc(ptr, layout);
     }
+}
+
+pub fn ac_check() {
+    if ReentrancyGuard::inc() != 1 {
+        println!(
+            "=={}== ERROR: AddressCleaner panic-in-alloc at pc {:p}",
+            preempt::CURRENT_TASK.pid,
+            unsafe { return_address(0) }
+        );
+        println!(
+            " => layout to be alloced is {:?}",
+            _OLD_TMP_ENTER_LAYOUT.get().unwrap()
+        );
+        println!("=={}== ABORTING", preempt::CURRENT_TASK.pid);
+        return;
+    }
+    // AddrLo
+    if AddrLo::get() == 0 {
+        println!("Ahhh crap, no allocations");
+        return;
+    }
+    for r in RANGES.get() {
+        if r.2 {
+            let layout = r.0;
+            let ptr = r.1 as *mut u8;
+            let paddedsz = (layout.size() + 4095) / 4096 * 4096;
+
+            for n in 0..((paddedsz - layout.size()) / 8) {
+                // (n * 8) as isize
+                if unsafe {
+                    (ptr as *mut u64)
+                        .offset((layout.size() + (n * 8)) as isize)
+                        .read()
+                } != 0x1badb0071badb007
+                {
+                    println!(
+                        "=={}== ERROR: AddressCleaner shadow-space-write (checked at pc {:p})",
+                        preempt::CURRENT_TASK.pid,
+                        unsafe { return_address(0) }
+                    );
+                    println!(" => memory layout is {:?}", layout);
+                    println!(" => write at {:p}", unsafe {
+                        ptr.offset((layout.size() + (n * 8)) as isize)
+                    });
+                    // show shadow space:
+                    let mut ptr = unsafe { ptr.offset((layout.size() + (n * 8)) as isize) };
+                    if ptr as u64 & 0xf == 0x8 {
+                        ptr = unsafe { ptr.offset(-8) };
+                    }
+                    ptr = unsafe { ptr.offset(-32) };
+                    print!("Data:");
+                    let dat: &[u8] = &[0x07, 0xb0, 0xad, 0x1b];
+                    for i in 0..64 {
+                        if i & 0xf == 0 {
+                            print!("\n{:p}:", unsafe { ptr.offset(i) });
+                        }
+                        let val = unsafe { ptr.read() };
+                        if dat[(i & 3) as usize] == val {
+                            println!("  {:#016x?} ", val);
+                        } else {
+                            println!(" [{:#016x?}]", val);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // [GUARD ][ DATA ][GUARD ]
+    // ^ old   ^       |
+    //         \-start |
+    //                 \-- _guardhi
+
+    ReentrancyGuard::dec();
+    _OLD_TMP_ENTER_LAYOUT.get().take();
+    // start as *mut u8
 }
 
 //// EndAddressCleaner CleanGuardedAlloc

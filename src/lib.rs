@@ -12,6 +12,7 @@
 #![reexport_test_harness_main = "test_main"]
 #![allow(unused_imports)]
 #![feature(naked_functions)]
+#![feature(panic_info_message)]
 #![feature(const_ptr_offset)]
 #![feature(iter_advance_by)]
 #![feature(const_raw_ptr_to_usize_cast)]

@@ -6,11 +6,12 @@ pub use crate::{
 };
 pub use alloc::format;
 pub use alloc::{boxed::Box, collections::*, collections::*, string::*, vec, vec::Vec};
+use core::ops::{Deref, DerefMut};
 pub use core::sync::atomic::*;
 pub use lazy_static::lazy_static;
+pub use preempt::glblutil::*;
 pub use x86::io::*;
 pub use x86_64::VirtAddr;
-pub use preempt::glblutil::*;
 #[macro_export]
 #[allow(non_upper_case_globals)]
 macro_rules! ezy_static {
@@ -35,6 +36,8 @@ macro_rules! _ezy_static {
     }
 }
 
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
 #[macro_export]
 macro_rules! counter {
     ( $NAME: ident ) => {
