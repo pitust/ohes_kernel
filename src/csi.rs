@@ -9,6 +9,7 @@ pub fn csi(panicinfo: &PanicInfo) {
     println!(" => We are pid: {}", task().pid);
     println!(" ======= Processes =======");
     for tsk in preempt::TASK_QUEUE.get() {
+		println!(" == bgnps ==");
         println!(" ==> pid {}", tsk.pid);
         for p in stack_canaries::CANARIES.get() {
             if p.0 == tsk.rsp_ptr {
@@ -28,7 +29,8 @@ pub fn csi(panicinfo: &PanicInfo) {
         println!("   r15 = {:#x?}", tsk.state.r15);
         println!("   rsp = {:#x?}", tsk.state.rsp);
         println!("   rip = {:#x?}", tsk.state.rip);
-        println!("   rsi = {:#x?}", tsk.state.rsi);
+		println!("   rsi = {:#x?}", tsk.state.rsi);
+		println!(" == endps ==");
     }
     println!("~~ End CSI Report ~~");
 }
