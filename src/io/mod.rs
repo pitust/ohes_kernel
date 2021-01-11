@@ -432,12 +432,16 @@ macro_rules! input {
 
 #[doc(hidden)]
 pub fn print_out(args: Arguments) {
-    Printer.write_fmt(args).expect("Write failed");
+	x86_64::instructions::interrupts::without_interrupts(|| {
+		Printer.write_fmt(args).expect("Write failed");
+	})
 }
 
 #[doc(hidden)]
 pub fn dprint_out(args: Arguments) {
-    DbgPrinter.write_fmt(args).expect("Write failed");
+	x86_64::instructions::interrupts::without_interrupts(|| {
+		DbgPrinter.write_fmt(args).expect("Write failed");
+	})
 }
 
 use log::{Level, LevelFilter, Metadata, Record};
