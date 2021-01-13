@@ -10,14 +10,14 @@ build/oh_es.iso: build/debugkernel.elf build/releasekernel.elf cfg/grub.cfg
 	grub-mkrescue -o build/oh_es.iso iso
 
 build/debugkernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
-	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/debugkernel.elf -n
+	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -Tlink.ld build/boot.o  -o build/debugkernel.elf -n
 	grub-file --is-x86-multiboot build/debugkernel.elf
 
 build/releasekernel.elf: target/x86_64-unknown-none/debug/liban_os.a build/boot.o
-	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -T/home/pitust/code/an_os/link.ld build/boot.o  -o build/releasekernel.elf -n
+	ld.lld target/x86_64-unknown-none/debug/liban_os.a /opt/cross/lib/gcc/x86_64-elf/10.2.0/libgcc.a --allow-multiple-definition -Tlink.ld build/boot.o  -o build/releasekernel.elf -n
 	strip build/releasekernel.elf
 	# sstrip build/releasekernel.elf
-	grub-file --is-x86-multiboot build/releasekernel.elf
+	grub-file --is-x86-multiboot build/releasekernel.elf	
 
 build/test.elf: build/test.o
 	ld -T user/user.ld build/test.o -o build/test.elf
