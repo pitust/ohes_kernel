@@ -22,7 +22,7 @@ multiboot = "0.6.0"
   
 [dependencies.conquer-once]
 default-features = false
-version = "0.2.0"
+version = "0.3.2"
 
 [dependencies.cpp_demangle]
 default-features = false
